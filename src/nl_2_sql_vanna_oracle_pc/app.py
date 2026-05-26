@@ -32,6 +32,13 @@ def create_agent() -> Agent:
     )
 
     return Agent(
+        workflow_handler=DefaultWorkflowHandler(
+        welcome_message=(
+            "# 👋 Xin chàochào\n\n"
+            "Hãy hỏi tôi về database oracleoracle.\n\n"
+            "gõgõ `/help` để có các câu lệnh."
+        )
+    ),
         llm_service=llm,
         tool_registry=tools,
         user_resolver=user_resolver,
