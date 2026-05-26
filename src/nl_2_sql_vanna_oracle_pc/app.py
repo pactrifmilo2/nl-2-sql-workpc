@@ -15,6 +15,7 @@ from .memory import create_agent_memory
 from .settings import settings
 from .system_prompt import AtfmSystemPromptBuilder
 from .tools import create_tool_registry
+from .workflow import create_workflow_handler
 
 
 def create_agent() -> Agent:
@@ -32,13 +33,6 @@ def create_agent() -> Agent:
     )
 
     return Agent(
-        workflow_handler=DefaultWorkflowHandler(
-        welcome_message=(
-            "# 👋 Xin chàochào\n\n"
-            "Hãy hỏi tôi về database oracleoracle.\n\n"
-            "gõgõ `/help` để có các câu lệnh."
-        )
-    ),
         llm_service=llm,
         tool_registry=tools,
         user_resolver=user_resolver,
@@ -46,6 +40,7 @@ def create_agent() -> Agent:
         system_prompt_builder=AtfmSystemPromptBuilder(),
         llm_context_enhancer=llm_context_enhancer,
         llm_middlewares=[ForceToolUseMiddleware(llm)],
+        workflow_handler=create_workflow_handler(),
     )
 
 
