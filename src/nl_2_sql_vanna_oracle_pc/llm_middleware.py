@@ -3,16 +3,46 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import uuid
 from typing import Any
 
-from vanna.core.llm import LlmRequest, LlmResponse
+from vanna.core.llm import LlmRequest, LlmResponse, LlmService
 from vanna.core.middleware import LlmMiddleware
 from vanna.core.tool import ToolCall
 
+from .tool_use import build_force_tool_request, should_force_tool_use
+
+logger = logging.getLogger(__name__)
+
 SQL_BLOCK_PATTERN = re.compile(r"```(?:sql)?\s*\n(.*?)```", re.IGNORECASE | re.DOTALL)
 FENCED_BLOCK_PATTERN = re.compile(r"```(?:json)?\s*\n(.*?)```", re.IGNORECASE | re.DOTALL)
+
+
+class ForceToolUseMiddleware(LlmMiddleware):
+    """Retry once when a data question gets a conversational reply instead of run_sql."""
+
+    def __init__(self, llm_service: LlmService):
+        self.llm_service = llm_service
+        self.text_tool_call_middleware = TextToolCallMiddleware()
+
+    async def after_llm_response(
+        self, request: LlmRequest, response: LlmResponse
+    ) -> LlmResponse:
+        response = await self.text_tool_call_middleware.after_llm_response(
+            request, response
+        )
+
+        if not should_force_tool_use(request, response):
+            return response
+
+        logger.info("No tool call for data question; retrying with forced run_sql instruction")
+        retry_request = build_force_tool_request(request)
+        retry_response = await self.llm_service.send_request(retry_request)
+        return await self.text_tool_call_middleware.after_llm_response(
+            retry_request, retry_response
+        )
 
 
 class TextToolCallMiddleware(LlmMiddleware):

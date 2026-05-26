@@ -4,11 +4,16 @@ from .server import VannaFastAPIServerWithVoice
 
 from .auth import create_user_resolver
 from .database import create_db_tool
-from .llm_context import CombinedEnhancer, TableScopeEnhancer
+from .llm_context import (
+    CombinedEnhancer,
+    TableScopeEnhancer,
+    ToolMemoryContextEnhancer,
+)
 from .llm import create_llm_service
-from .llm_middleware import TextToolCallMiddleware
+from .llm_middleware import ForceToolUseMiddleware
 from .memory import create_agent_memory
 from .settings import settings
+from .system_prompt import AtfmSystemPromptBuilder
 from .tools import create_tool_registry
 
 
@@ -21,6 +26,7 @@ def create_agent() -> Agent:
     llm_context_enhancer = CombinedEnhancer(
         [
             DefaultLlmContextEnhancer(agent_memory),
+            ToolMemoryContextEnhancer(agent_memory),
             TableScopeEnhancer(settings.allowed_tables, settings.allowed_columns),
         ]
     )
@@ -30,8 +36,9 @@ def create_agent() -> Agent:
         tool_registry=tools,
         user_resolver=user_resolver,
         agent_memory=agent_memory,
+        system_prompt_builder=AtfmSystemPromptBuilder(),
         llm_context_enhancer=llm_context_enhancer,
-        llm_middlewares=[TextToolCallMiddleware()],
+        llm_middlewares=[ForceToolUseMiddleware(llm)],
     )
 
 

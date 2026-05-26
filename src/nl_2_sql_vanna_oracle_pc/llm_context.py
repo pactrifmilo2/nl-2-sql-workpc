@@ -1,5 +1,9 @@
+import uuid
+
+from vanna.capabilities.agent_memory import AgentMemory
 from vanna.core.enhancer import LlmContextEnhancer
 from vanna.core.llm import LlmMessage
+from vanna.core.tool import ToolContext
 from vanna.core.user import User
 
 
@@ -35,6 +39,8 @@ Rules:
 - Map Vietnamese table intent: chuyến bay trong ngày/hôm nay=ATFM.T_DAY_FLIGHTS; chuyến bay đã hoàn thành=ATFM.T_FINISHED_FLIGHTS.
 - Treat the table and column lists above as the complete schema. Do not infer, mention, join, or query anything outside them.
 - Never ask the user if they want to run the query; you MUST call the run_sql tool to execute the query.
+- Never suggest a rephrased or example question — execute run_sql for the question as asked.
+- Never say you will search or help later — call run_sql in your first response.
 - Always use schema-qualified table names (ATFM.T_DAY_FLIGHTS or ATFM.T_FINISHED_FLIGHTS).
 - SELECT only the columns needed from the allowed column list; never use SELECT * and never reference other columns.
 - ATD and ATA apply to completed flights (ATFM.T_FINISHED_FLIGHTS). For same-day scheduled flights use ATFM.T_DAY_FLIGHTS with ETD and ETA.
@@ -49,6 +55,63 @@ Rules:
 
 """
         return system_prompt + constraints
+
+    async def enhance_user_messages(
+        self,
+        messages: list[LlmMessage],
+        user: User,
+    ) -> list[LlmMessage]:
+        return messages
+
+
+class ToolMemoryContextEnhancer(LlmContextEnhancer):
+    """Inject similar question→SQL examples so the model need not call search first."""
+
+    def __init__(self, agent_memory: AgentMemory | None = None):
+        self.agent_memory = agent_memory
+
+    async def enhance_system_prompt(
+        self,
+        system_prompt: str,
+        user_message: str,
+        user: User,
+    ) -> str:
+        if not self.agent_memory:
+            return system_prompt
+
+        try:
+            context = ToolContext(
+                user=user,
+                conversation_id="temp",
+                request_id=str(uuid.uuid4()),
+                agent_memory=self.agent_memory,
+            )
+            matches = await self.agent_memory.search_similar_usage(
+                question=user_message,
+                context=context,
+                limit=3,
+                similarity_threshold=0.45,
+                tool_name_filter="run_sql",
+            )
+        except Exception:
+            return system_prompt
+
+        if not matches:
+            return system_prompt
+
+        examples_section = "\n\n## Similar Successful Queries\n\n"
+        examples_section += (
+            "Use these as patterns. Call run_sql directly — do not suggest other questions.\n\n"
+        )
+
+        for result in matches:
+            memory = result.memory
+            sql = memory.args.get("sql", "").strip()
+            examples_section += f'Question: "{memory.question}"\n'
+            examples_section += f"Tool: {memory.tool_name}\n"
+            examples_section += f"SQL:\n```sql\n{sql}\n```\n\n"
+
+        return system_prompt + examples_section
 
     async def enhance_user_messages(
         self,

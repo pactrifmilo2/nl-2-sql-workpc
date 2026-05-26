@@ -18,7 +18,9 @@ TRAINING_EXAMPLES = [
         tool_name="run_sql",
         args={
             "sql": """
-            SELECT FLIGHTNBR, FROM_AIRP, TO_AIRP, ETD, ETA, VIA, ATD, ATA FROM ATFM.T_FINISHED_FLIGHTS WHERE VIA = 'DAD'
+            SELECT FLIGHTNBR, FROM_AIRP, TO_AIRP, ETD, ETA, VIA, ATD, ATA
+            FROM ATFM.T_FINISHED_FLIGHTS
+            WHERE VIA = 'Q1/W2'
             """
         },
     ),
