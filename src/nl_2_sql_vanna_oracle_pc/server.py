@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from vanna.servers.base.templates import get_index_html
 from vanna.servers.fastapi import VannaFastAPIServer
 
+from .auth_middleware import BasicAuthMiddleware
 from .settings import settings
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -81,5 +82,12 @@ class VannaFastAPIServerWithVoice(VannaFastAPIServer):
             speech_lang=settings.speech_recognition_lang,
         )
         _replace_index_route(app, index_html)
+
+        if settings.basic_auth_enabled:
+            app.add_middleware(
+                BasicAuthMiddleware,
+                username=settings.app_basic_auth_user,
+                password=settings.app_basic_auth_password,
+            )
 
         return app

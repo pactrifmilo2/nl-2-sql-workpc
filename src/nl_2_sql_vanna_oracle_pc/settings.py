@@ -33,10 +33,28 @@ def build_oracle_dsn() -> str:
     return f"{host}:{port}/{service}"
 
 
+def build_ollama_host() -> str:
+    """Return Ollama base URL without embedded credentials."""
+    host = getenv("OLLAMA_HOST", "http://127.0.0.1:11434").strip()
+    if "@" not in host:
+        return host
+
+    scheme, _, rest = host.partition("://")
+    if not rest:
+        return host
+
+    _, _, host_without_auth = rest.partition("@")
+    if scheme:
+        return f"{scheme}://{host_without_auth}"
+    return host_without_auth
+
+
 @dataclass(frozen=True)
 class Settings:
     ollama_model: str = getenv("OLLAMA_MODEL")
-    ollama_host: str = getenv("OLLAMA_HOST")
+    ollama_host: str = field(default_factory=build_ollama_host)
+    ollama_basic_auth_user: str = getenv("OLLAMA_BASIC_AUTH_USER", "").strip()
+    ollama_basic_auth_password: str = getenv("OLLAMA_BASIC_AUTH_PASSWORD", "")
 
     oracle_user: str = getenv("ORACLE_USER", "")
     oracle_password: str = getenv("ORACLE_PASSWORD", "")
@@ -49,6 +67,17 @@ class Settings:
     allowed_columns: set[str] = field(default_factory=default_allowed_columns)
 
     speech_recognition_lang: str = getenv("SPEECH_RECOGNITION_LANG", "vi-VN")
+
+    app_basic_auth_user: str = getenv("APP_BASIC_AUTH_USER", "").strip()
+    app_basic_auth_password: str = getenv("APP_BASIC_AUTH_PASSWORD", "")
+
+    @property
+    def basic_auth_enabled(self) -> bool:
+        return bool(self.app_basic_auth_user and self.app_basic_auth_password)
+
+    @property
+    def ollama_basic_auth_enabled(self) -> bool:
+        return bool(self.ollama_basic_auth_user and self.ollama_basic_auth_password)
 
 
 settings = Settings()
