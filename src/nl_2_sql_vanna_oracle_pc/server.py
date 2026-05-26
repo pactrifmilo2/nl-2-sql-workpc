@@ -1,19 +1,50 @@
 """FastAPI server with voice-to-text enabled chat UI."""
 
+from html import escape
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
-from vanna.servers.base.templates import get_index_html
+from vanna.servers.base.templates import get_vanna_component_script
 from vanna.servers.fastapi import VannaFastAPIServer
 
 from .auth_middleware import BasicAuthMiddleware
 from .settings import settings
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
+INDEX_TEMPLATE = TEMPLATE_DIR / "index.html"
+
+
+def get_local_index_html(
+    *,
+    dev_mode: bool = False,
+    static_path: str = "/static",
+    cdn_url: str = "https://img.vanna.ai/vanna-components.js",
+    api_base_url: str = "",
+    page_title: str = "NL to SQL Assistant",
+    page_heading: str = "NL to SQL Assistant",
+    chat_title: str = "Oracle Data Assistant",
+    extra_body_scripts: str = "",
+) -> str:
+    """Render the project-owned chat page instead of editing Vanna in site-packages."""
+    component_script = get_vanna_component_script(dev_mode, static_path, cdn_url)
+    replacements = {
+        "__PAGE_TITLE__": escape(page_title),
+        "__PAGE_HEADING__": escape(page_heading),
+        "__CHAT_TITLE__": escape(chat_title),
+        "__API_BASE_URL__": escape(api_base_url, quote=True),
+        "__COMPONENT_SCRIPT__": component_script,
+        "__EXTRA_BODY_SCRIPTS__": extra_body_scripts,
+    }
+
+    html = INDEX_TEMPLATE.read_text(encoding="utf-8")
+    for placeholder, value in replacements.items():
+        html = html.replace(placeholder, value)
+    return html
 
 
 def get_index_html_with_voice(
@@ -24,13 +55,6 @@ def get_index_html_with_voice(
     api_base_url: str = "",
     speech_lang: str = "vi-VN",
 ) -> str:
-    html = get_index_html(
-        dev_mode=dev_mode,
-        static_path=static_path,
-        cdn_url=cdn_url,
-        api_base_url=api_base_url,
-    )
-
     config_script = (
         "<script>"
         f"window.VOICE_INPUT_CONFIG = {{ lang: {speech_lang!r}, continuous: false }};"
@@ -39,7 +63,13 @@ def get_index_html_with_voice(
     voice_script = f'<script src="{static_path}/voice-input.js" defer></script>'
     injection = f"\n    {config_script}\n    {voice_script}\n"
 
-    return html.replace("</body>", f"{injection}</body>")
+    return get_local_index_html(
+        dev_mode=dev_mode,
+        static_path=static_path,
+        cdn_url=cdn_url,
+        api_base_url=api_base_url,
+        extra_body_scripts=injection,
+    )
 
 
 def _replace_index_route(app: FastAPI, html: str) -> None:

@@ -21,4 +21,4 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-nl_2_sql_vanna_oracle_pc = ["static/*"]
+nl_2_sql_vanna_oracle_pc = ["static/*", "templates/*"]

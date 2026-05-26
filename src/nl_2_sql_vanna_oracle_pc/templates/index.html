@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>__PAGE_TITLE__</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+            color: #172033;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at top left, rgba(21, 168, 168, 0.14), transparent 36rem),
+                linear-gradient(180deg, #f5f7fb 0%, #ffffff 100%);
+        }
+
+        main {
+            box-sizing: border-box;
+            width: min(1120px, 100%);
+            min-height: 100vh;
+            margin: 0 auto;
+            padding: 32px 20px;
+        }
+
+        header {
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            color: #023d60;
+            font-size: clamp(2rem, 5vw, 3rem);
+        }
+
+        p {
+            margin: 0;
+            color: #536173;
+        }
+
+        .chat-shell {
+            height: min(720px, calc(100vh - 180px));
+            min-height: 520px;
+            overflow: hidden;
+            border: 1px solid rgba(2, 61, 96, 0.12);
+            border-radius: 18px;
+            background: #ffffff;
+            box-shadow: 0 18px 45px rgba(23, 32, 51, 0.12);
+        }
+
+        vanna-chat {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+    __COMPONENT_SCRIPT__
+</head>
+<body>
+    <main>
+        <header>
+            <h1>__PAGE_HEADING__</h1>
+            <p>Ask questions about Oracle data in natural language.</p>
+        </header>
+
+        <section class="chat-shell" aria-label="Vanna chat">
+            <vanna-chat
+                title="__CHAT_TITLE__"
+                api-base="__API_BASE_URL__"
+                sse-endpoint="__API_BASE_URL__/api/vanna/v2/chat_sse"
+                ws-endpoint="__API_BASE_URL__/api/vanna/v2/chat_websocket"
+                poll-endpoint="__API_BASE_URL__/api/vanna/v2/chat_poll">
+            </vanna-chat>
+        </section>
+    </main>
+    __EXTRA_BODY_SCRIPTS__
+</body>
+</html>
