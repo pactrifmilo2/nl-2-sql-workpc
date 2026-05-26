@@ -1,5 +1,6 @@
 ALLOWED_COLUMNS = (
     "FLIGHTNBR",
+    "FLIGHTDATE",
     "FROM_AIRP",
     "TO_AIRP",
     "ETD",
@@ -15,6 +16,7 @@ column names below exactly as written (uppercase English identifiers).
 
 Allowed columns (the complete column set — do not SELECT or filter on anything else):
 - FLIGHTNBR — flight number / số hiệu chuyến bay
+- FLIGHTDATE — flight date / ngày bay
 - FROM_AIRP — departure airport code / sân bay đi / điểm đi
 - TO_AIRP — arrival airport code / sân bay đến / điểm đến
 - ETD — estimated time of departure / giờ cất cánh dự kiến
