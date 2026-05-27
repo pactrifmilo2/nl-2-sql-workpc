@@ -8,7 +8,7 @@ CHAT_TITLE = "Oracle Data Assistant"
 
 # Chat starter UI (workflow.py)
 WELCOME_MESSAGE = (
-    "# Chào mừng bạn đến với Vanna AI\n\n"
+    "# Chào mừng bạn đến với Oracle AI\n\n"
     "Tôi là trợ lý phân tích dữ liệu AI. Hãy hỏi tôi bất cứ điều gì về dữ liệu Oracle "
     "bằng tiếng Việt!\n\n"
     "Gõ `/help` để xem các lệnh có thể dùng."
@@ -16,7 +16,7 @@ WELCOME_MESSAGE = (
 
 SETUP_REQUIRED_MESSAGE = (
     "# Cần cấu hình\n\n"
-    "Vanna AI cần được cấu hình trước khi có thể giúp bạn phân tích dữ liệu."
+    "Oracle AI cần được cấu hình trước khi có thể giúp bạn phân tích dữ liệu."
 )
 
 
