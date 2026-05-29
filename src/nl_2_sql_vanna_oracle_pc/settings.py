@@ -104,6 +104,13 @@ class Settings:
         default_factory=lambda: parse_bool_env("AUDIT_SANITIZE_TOOL_PARAMETERS", True)
     )
 
+    hitl_enabled: bool = field(
+        default_factory=lambda: parse_bool_env("HITL_ENABLED", default=True)
+    )
+    hitl_feedback_log_file: str = getenv(
+        "HITL_FEEDBACK_LOG_FILE", "logs/feedback.jsonl"
+    ).strip()
+
     log_level: str = getenv("LOG_LEVEL", "INFO")
     log_file: str = getenv("LOG_FILE", "logs/app.log").strip()
     log_file_max_bytes: int = int(getenv("LOG_FILE_MAX_BYTES", str(5 * 1024 * 1024)))

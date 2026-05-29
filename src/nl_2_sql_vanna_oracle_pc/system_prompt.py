@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, List, Optional
 
 from vanna.core.system_prompt import SystemPromptBuilder
 
+from .settings import Settings, settings as default_settings
+
 if TYPE_CHECKING:
     from vanna.core.tool.models import ToolSchema
     from vanna.core.user.models import User
@@ -12,6 +14,9 @@ if TYPE_CHECKING:
 
 class AtfmSystemPromptBuilder(SystemPromptBuilder):
     """System prompt tuned for Ollama models that skip native tool calls."""
+
+    def __init__(self, settings: Settings | None = None) -> None:
+        self.settings = settings or default_settings
 
     async def build_system_prompt(
         self, user: "User", tools: List["ToolSchema"]
@@ -52,9 +57,15 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
             )
 
         if "save_question_tool_args" in tool_names:
-            prompt_parts.append(
-                "\nAfter a successful run_sql, call save_question_tool_args to store the pattern."
-            )
+            if self.settings.hitl_enabled:
+                prompt_parts.append(
+                    "\nDo not call save_question_tool_args. The user approves saving "
+                    "via 👍 /save_to_memory in the chat UI after reviewing results."
+                )
+            else:
+                prompt_parts.append(
+                    "\nAfter a successful run_sql, call save_question_tool_args to store the pattern."
+                )
 
         if "save_text_memory" in tool_names:
             prompt_parts.extend(

@@ -1,5 +1,4 @@
 import asyncio
-import re
 from uuid import uuid4
 
 from vanna.capabilities.agent_memory.base import AgentMemory
@@ -8,28 +7,8 @@ from vanna.core.user.models import User
 
 from .memory import create_agent_memory
 from .settings import settings
+from .sql_scope import uses_only_allowed_tables
 from .training_data import BUSINESS_CONTEXT, TRAINING_EXAMPLES
-
-
-TABLE_REFERENCE_PATTERN = re.compile(r"\b(?:FROM|JOIN)\s+([A-Z0-9_.$\"]+)", re.IGNORECASE)
-
-
-def extract_referenced_tables(sql: str) -> set[str]:
-    tables = set()
-
-    for match in TABLE_REFERENCE_PATTERN.finditer(sql):
-        table_name = match.group(1).strip('"').split(".")[-1].upper()
-        tables.add(table_name)
-
-    return tables
-
-
-def uses_only_allowed_tables(sql: str, allowed_tables: set[str]) -> bool:
-    if not allowed_tables:
-        return True
-
-    referenced_tables = extract_referenced_tables(sql)
-    return referenced_tables <= allowed_tables
 
 
 def create_training_user() -> User:

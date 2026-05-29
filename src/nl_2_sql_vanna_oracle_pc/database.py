@@ -38,6 +38,8 @@ class JsonSafeSqlRunner(SqlRunner):
 class FullResultRunSqlTool(RunSqlTool):
     async def execute(self, context: ToolContext, args: RunSqlToolArgs) -> ToolResult:
         logger.debug("run_sql invoked by user=%s", context.user.id)
+        context.metadata["hitl_tool_name"] = self.name
+        context.metadata["hitl_tool_args"] = {"sql": args.sql}
         try:
             result = await super().execute(context, args)
         except Exception:
