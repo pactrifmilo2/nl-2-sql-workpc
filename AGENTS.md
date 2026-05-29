@@ -66,7 +66,7 @@ nl-2-sql-vanna-oracle/
    ```
 6. Open `http://localhost:8000`. Set cookie `vanna_email=admin@example.com` for admin tools.
 
-Re-run `train.py` after changing `training_data.py` or `schema_context.py`. If you change `CHROMA_COLLECTION_NAME` or wipe examples, delete `./chroma_db` first (see `.env.oracle.example`).
+Re-run `train.py` after changing `training_data.py` or `schema_context.py` — it clears the Chroma collection then re-seeds (no duplicates). **Warning:** that also removes admin-approved examples saved from chat. Delete `./chroma_db` only when changing `CHROMA_COLLECTION_NAME` or resetting all collections.
 
 ## Architecture
 
