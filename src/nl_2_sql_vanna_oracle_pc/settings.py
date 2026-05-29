@@ -33,6 +33,13 @@ def build_oracle_dsn() -> str:
     return f"{host}:{port}/{service}"
 
 
+def parse_bool_env(name: str, default: bool = True) -> bool:
+    raw = getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def build_ollama_host() -> str:
     """Return Ollama base URL without embedded credentials."""
     host = getenv("OLLAMA_HOST", "http://127.0.0.1:11434").strip()
@@ -70,6 +77,37 @@ class Settings:
 
     app_basic_auth_user: str = getenv("APP_BASIC_AUTH_USER", "").strip()
     app_basic_auth_password: str = getenv("APP_BASIC_AUTH_PASSWORD", "")
+
+    audit_enabled: bool = field(
+        default_factory=lambda: parse_bool_env("AUDIT_ENABLED", default=True)
+    )
+    audit_log_file: str = getenv("AUDIT_LOG_FILE", "logs/audit.jsonl").strip()
+    audit_log_tool_access_checks: bool = field(
+        default_factory=lambda: parse_bool_env("AUDIT_LOG_TOOL_ACCESS_CHECKS", True)
+    )
+    audit_log_tool_invocations: bool = field(
+        default_factory=lambda: parse_bool_env("AUDIT_LOG_TOOL_INVOCATIONS", True)
+    )
+    audit_log_tool_results: bool = field(
+        default_factory=lambda: parse_bool_env("AUDIT_LOG_TOOL_RESULTS", True)
+    )
+    audit_log_ui_feature_checks: bool = field(
+        default_factory=lambda: parse_bool_env("AUDIT_LOG_UI_FEATURE_CHECKS", False)
+    )
+    audit_log_ai_responses: bool = field(
+        default_factory=lambda: parse_bool_env("AUDIT_LOG_AI_RESPONSES", True)
+    )
+    audit_include_full_ai_responses: bool = field(
+        default_factory=lambda: parse_bool_env("AUDIT_INCLUDE_FULL_AI_RESPONSES", False)
+    )
+    audit_sanitize_tool_parameters: bool = field(
+        default_factory=lambda: parse_bool_env("AUDIT_SANITIZE_TOOL_PARAMETERS", True)
+    )
+
+    log_level: str = getenv("LOG_LEVEL", "INFO")
+    log_file: str = getenv("LOG_FILE", "logs/app.log").strip()
+    log_file_max_bytes: int = int(getenv("LOG_FILE_MAX_BYTES", str(5 * 1024 * 1024)))
+    log_file_backup_count: int = int(getenv("LOG_FILE_BACKUP_COUNT", "3"))
 
     @property
     def basic_auth_enabled(self) -> bool:
