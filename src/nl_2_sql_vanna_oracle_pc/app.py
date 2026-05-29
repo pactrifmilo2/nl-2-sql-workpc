@@ -2,7 +2,9 @@ from vanna import Agent
 from vanna.core.enhancer import DefaultLlmContextEnhancer
 from .server import VannaFastAPIServerWithVoice
 
+from .audit import create_agent_config, create_audit_logger
 from .auth import create_user_resolver
+from .logging_config import log_startup_summary
 from .database import create_db_tool
 from .llm_context import (
     CombinedEnhancer,
@@ -19,6 +21,7 @@ from .workflow import create_workflow_handler
 
 
 def create_agent() -> Agent:
+    log_startup_summary(settings)
     llm = create_llm_service(settings)
     db_tool = create_db_tool(settings)
     agent_memory = create_agent_memory(settings)
@@ -37,6 +40,8 @@ def create_agent() -> Agent:
         tool_registry=tools,
         user_resolver=user_resolver,
         agent_memory=agent_memory,
+        config=create_agent_config(settings),
+        audit_logger=create_audit_logger(settings),
         system_prompt_builder=AtfmSystemPromptBuilder(),
         llm_context_enhancer=llm_context_enhancer,
         llm_middlewares=[ForceToolUseMiddleware(llm)],

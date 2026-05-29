@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -9,6 +10,8 @@ from vanna.integrations.oracle import OracleRunner
 from vanna.tools import RunSqlTool
 
 from .settings import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class JsonSafeSqlRunner(SqlRunner):
@@ -34,7 +37,12 @@ class JsonSafeSqlRunner(SqlRunner):
 
 class FullResultRunSqlTool(RunSqlTool):
     async def execute(self, context: ToolContext, args: RunSqlToolArgs) -> ToolResult:
-        result = await super().execute(context, args)
+        logger.debug("run_sql invoked by user=%s", context.user.id)
+        try:
+            result = await super().execute(context, args)
+        except Exception:
+            logger.exception("run_sql failed for user=%s", context.user.id)
+            raise
 
         row_count = result.metadata.get("row_count")
         rich_component = (
@@ -45,6 +53,15 @@ class FullResultRunSqlTool(RunSqlTool):
 
         if isinstance(row_count, int) and hasattr(rich_component, "max_rows_displayed"):
             rich_component.max_rows_displayed = row_count
+
+        if result.success:
+            logger.debug("run_sql succeeded: rows=%s user=%s", row_count, context.user.id)
+        else:
+            logger.warning(
+                "run_sql returned error for user=%s: %s",
+                context.user.id,
+                result.error,
+            )
 
         return result
 

@@ -11,3 +11,11 @@ wheels/
 
 # Local configuration and secrets
 .env
+
+# Audit logs
+logs/
+
+#
+*.csv
+chroma_db/*
+chroma_db/chroma.sqlite3

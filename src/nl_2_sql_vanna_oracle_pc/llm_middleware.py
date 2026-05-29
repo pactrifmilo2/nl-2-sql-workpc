@@ -40,9 +40,14 @@ class ForceToolUseMiddleware(LlmMiddleware):
         logger.info("No tool call for data question; retrying with forced run_sql instruction")
         retry_request = build_force_tool_request(request)
         retry_response = await self.llm_service.send_request(retry_request)
-        return await self.text_tool_call_middleware.after_llm_response(
+        retry_response = await self.text_tool_call_middleware.after_llm_response(
             retry_request, retry_response
         )
+        if retry_response.is_tool_call():
+            logger.info("Force-tool retry produced tool call(s): %s", retry_response.tool_calls)
+        else:
+            logger.warning("Force-tool retry still returned no tool call")
+        return retry_response
 
 
 class TextToolCallMiddleware(LlmMiddleware):
@@ -66,6 +71,11 @@ class TextToolCallMiddleware(LlmMiddleware):
         if not tool_calls:
             return response
 
+        logger.debug(
+            "Parsed %d tool call(s) from text response: %s",
+            len(tool_calls),
+            [call.name for call in tool_calls],
+        )
         remaining_content = _strip_parsed_content(response.content, tool_calls)
         return LlmResponse(
             content=remaining_content or None,

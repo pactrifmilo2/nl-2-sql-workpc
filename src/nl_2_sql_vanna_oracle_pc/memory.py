@@ -1,6 +1,10 @@
+import logging
+
 from vanna.integrations.chromadb import ChromaAgentMemory
 
 from .settings import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class ResilientChromaAgentMemory(ChromaAgentMemory):
@@ -26,6 +30,7 @@ class ResilientChromaAgentMemory(ChromaAgentMemory):
             if "does not exist" not in str(exc).lower():
                 raise
 
+            logger.warning("Chroma collection missing during tool search; reinitializing: %s", exc)
             self._collection = None
             self.ensure_collection()
             return []
@@ -37,6 +42,7 @@ class ResilientChromaAgentMemory(ChromaAgentMemory):
             if "does not exist" not in str(exc).lower():
                 raise
 
+            logger.warning("Chroma collection missing during text search; reinitializing: %s", exc)
             self._collection = None
             self.ensure_collection()
             return []
@@ -48,5 +54,10 @@ def create_agent_memory(settings: Settings) -> ResilientChromaAgentMemory:
         persist_directory=settings.chroma_persist_directory,
     )
     memory.ensure_collection()
+    logger.debug(
+        "Agent memory ready: collection=%s persist_dir=%s",
+        settings.chroma_collection_name,
+        settings.chroma_persist_directory,
+    )
     return memory
 

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import base64
+import logging
 
 from vanna.integrations.ollama import OllamaLlmService
 
 from .settings import Settings
+
+logger = logging.getLogger(__name__)
 
 
 def _basic_auth_header(username: str, password: str) -> dict[str, str]:
@@ -34,5 +37,7 @@ def create_llm_service(settings: Settings) -> OllamaLlmService:
             headers=headers,
             timeout=service.timeout,
         )
+        logger.debug("Ollama client configured with basic auth")
 
+    logger.debug("LLM service ready: model=%s host=%s", settings.ollama_model, settings.ollama_host)
     return service
