@@ -28,7 +28,7 @@ TRAINING_EXAMPLES = [
         tool_name="run_sql",
         args={
             "sql": """
-            SELECT FLIGHTNBR, FROM_AIRP, TO_AIRP, ETD, ETA, VIA, ATD, ATA
+            SELECT FLIGHTNBR, FLIGHTDATE, FROM_AIRP, TO_AIRP, ETD, ETA, VIA, ATD, ATA
             FROM ATFM.T_DAY_FLIGHTS
             WHERE FLIGHTDATE = '2025-01-01'
             """
