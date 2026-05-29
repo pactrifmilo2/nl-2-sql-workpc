@@ -14,3 +14,5 @@ wheels/
 
 # Audit logs
 logs/
+
+# chroma_db/ is tracked (seeded training memory; not ignored)

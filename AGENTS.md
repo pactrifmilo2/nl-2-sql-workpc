@@ -52,7 +52,7 @@ nl-2-sql-vanna-oracle/
 │   ├── server.py              # FastAPI + voice UI template
 │   ├── content/vi.py          # Vietnamese strings
 │   └── ui/                    # index.html, voice-input.js
-├── chroma_db/                 # Created at runtime (gitignored)
+├── chroma_db/                 # Chroma persist dir (tracked after train.py)
 └── logs/                      # app.log, audit.jsonl, feedback.jsonl (gitignored)
 ```
 
@@ -145,7 +145,7 @@ Reference: `.env.oracle.example`.
 
 ## What not to do
 
-- Do not commit `chroma_db/`, `logs/`, `.venv/`, or `.env`.
+- Do not commit `logs/`, `.venv/`, or `.env`. Commit `chroma_db/` after `train.py` if you want seeded memory in the repo.
 - Do not use non-Oracle SQL dialects (`TOP`, `LIMIT`, `GETDATE()`, etc.) in examples or prompts.
 - Do not add columns or tables outside the ATFM allowlist without updating env, `schema_context.py`, enhancers, and training data together.
 - Do not remove `ForceToolUseMiddleware` / `TextToolCallMiddleware` without validating Ollama native tool calls for your model.
