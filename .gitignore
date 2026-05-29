@@ -15,7 +15,8 @@ wheels/
 # Audit logs
 logs/
 
-#
+# chroma_db/ is tracked (seeded training memory; not ignored)
+
 *.csv
 chroma_db/*
 chroma_db/chroma.sqlite3

@@ -1,5 +1,5 @@
 import asyncio
-import re
+import logging
 from uuid import uuid4
 
 from vanna.capabilities.agent_memory.base import AgentMemory
@@ -8,28 +8,10 @@ from vanna.core.user.models import User
 
 from .memory import create_agent_memory
 from .settings import settings
+from .sql_scope import uses_only_allowed_tables
 from .training_data import BUSINESS_CONTEXT, TRAINING_EXAMPLES
 
-
-TABLE_REFERENCE_PATTERN = re.compile(r"\b(?:FROM|JOIN)\s+([A-Z0-9_.$\"]+)", re.IGNORECASE)
-
-
-def extract_referenced_tables(sql: str) -> set[str]:
-    tables = set()
-
-    for match in TABLE_REFERENCE_PATTERN.finditer(sql):
-        table_name = match.group(1).strip('"').split(".")[-1].upper()
-        tables.add(table_name)
-
-    return tables
-
-
-def uses_only_allowed_tables(sql: str, allowed_tables: set[str]) -> bool:
-    if not allowed_tables:
-        return True
-
-    referenced_tables = extract_referenced_tables(sql)
-    return referenced_tables <= allowed_tables
+logger = logging.getLogger(__name__)
 
 
 def create_training_user() -> User:
@@ -50,8 +32,18 @@ def create_training_context(agent_memory: AgentMemory) -> ToolContext:
 
 
 async def seed_agent_memory(agent_memory: AgentMemory) -> None:
+    """Replace Chroma contents with training_data (idempotent; safe to re-run)."""
     context = create_training_context(agent_memory)
 
+    cleared = await agent_memory.clear_memories(context)
+    if cleared:
+        logger.info(
+            "Cleared %d existing memory(ies) from collection %s (includes chat-saved examples)",
+            cleared,
+            settings.chroma_collection_name,
+        )
+
+    seeded_tools = 0
     for example in TRAINING_EXAMPLES:
         if not uses_only_allowed_tables(example.args["sql"], settings.allowed_tables):
             continue
@@ -63,12 +55,20 @@ async def seed_agent_memory(agent_memory: AgentMemory) -> None:
             context=context,
             success=True,
         )
+        seeded_tools += 1
 
     for context_text in BUSINESS_CONTEXT:
         await agent_memory.save_text_memory(
             content=context_text,
             context=context,
         )
+
+    logger.info(
+        "Seeded %d tool example(s) and %d text memory(ies) into %s",
+        seeded_tools,
+        len(BUSINESS_CONTEXT),
+        settings.chroma_collection_name,
+    )
 
 
 async def main() -> None:
