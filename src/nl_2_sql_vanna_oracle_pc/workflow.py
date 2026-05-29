@@ -23,6 +23,8 @@ from .content.vi import (
 from .hitl import (
     PENDING_SAVE_KEY,
     FeedbackLogger,
+    clear_pending_save,
+    get_pending_save,
     is_admin,
 )
 from .settings import Settings
@@ -86,13 +88,20 @@ class AtfmWorkflowHandler(DefaultWorkflowHandler):
 
         return await super().try_handle(agent, user, conversation, message)
 
+    def _get_pending(
+        self, user: "User", conversation: "Conversation"
+    ) -> Optional[Dict[str, Any]]:
+        return get_pending_save(conversation.id, user.id) or conversation.metadata.get(
+            PENDING_SAVE_KEY
+        )
+
     async def _handle_save_to_memory(
         self,
         agent: "Agent",
         user: "User",
         conversation: "Conversation",
     ) -> WorkflowResult:
-        pending = conversation.metadata.get(PENDING_SAVE_KEY)
+        pending = self._get_pending(user, conversation)
         if not pending:
             return self._text_response(HITL_SAVE_NO_PENDING)
 
@@ -131,6 +140,7 @@ class AtfmWorkflowHandler(DefaultWorkflowHandler):
             committed=committed,
         )
         conversation.metadata.pop(PENDING_SAVE_KEY, None)
+        clear_pending_save(conversation.id, user.id)
         await agent.conversation_store.update_conversation(conversation)
         return self._text_response(content)
 
@@ -140,7 +150,9 @@ class AtfmWorkflowHandler(DefaultWorkflowHandler):
         user: "User",
         conversation: "Conversation",
     ) -> WorkflowResult:
-        pending = conversation.metadata.pop(PENDING_SAVE_KEY, None)
+        pending = self._get_pending(user, conversation)
+        conversation.metadata.pop(PENDING_SAVE_KEY, None)
+        clear_pending_save(conversation.id, user.id)
         sql = pending.get("args", {}).get("sql", "") if pending else ""
         question = pending.get("question", "") if pending else ""
 
@@ -177,7 +189,7 @@ class AtfmWorkflowHandler(DefaultWorkflowHandler):
         if not uses_only_allowed_tables(sql, self.settings.allowed_tables):
             return self._text_response(HITL_SAVE_INVALID_SQL)
 
-        pending = conversation.metadata.get(PENDING_SAVE_KEY)
+        pending = self._get_pending(user, conversation)
         question = ""
         if pending:
             question = pending.get("question", "")
@@ -214,6 +226,7 @@ class AtfmWorkflowHandler(DefaultWorkflowHandler):
             committed=True,
         )
         conversation.metadata.pop(PENDING_SAVE_KEY, None)
+        clear_pending_save(conversation.id, user.id)
         await agent.conversation_store.update_conversation(conversation)
         return self._text_response(HITL_CORRECT_SUCCESS)
 

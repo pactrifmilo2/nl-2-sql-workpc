@@ -27,8 +27,9 @@ HITL_SAVE_SUCCESS_ADMIN = (
     "Đã lưu mẫu câu hỏi → SQL vào bộ nhớ. Các truy vấn tương tự sẽ dùng mẫu này."
 )
 HITL_SAVE_SUCCESS_USER = (
-    "Cảm ơn phản hồi! Chỉ quản trị viên mới ghi vào bộ nhớ lâu dài; "
-    "phản hồi của bạn đã được ghi nhận."
+    "Cảm ơn phản hồi tích cực! Phản hồi của bạn đã được ghi vào nhật ký hệ thống.\n\n"
+    "**Lưu ý:** Chỉ quản trị viên mới có thể ghi mẫu câu hỏi → SQL vào bộ nhớ Chroma "
+    "(để agent học cho mọi người). Bạn vẫn có thể dùng 👍/👎 bình thường."
 )
 HITL_SAVE_NO_PENDING = "Không có truy vấn nào đang chờ lưu. Hãy chạy một câu hỏi dữ liệu trước."
 HITL_SAVE_INVALID_SQL = (
