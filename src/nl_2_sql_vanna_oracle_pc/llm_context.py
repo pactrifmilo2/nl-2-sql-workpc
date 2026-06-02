@@ -50,6 +50,10 @@ Rules:
 - Use FETCH FIRST n ROWS ONLY after ORDER BY when restricting row count (Oracle 12c+).
 - For a specific calendar day on a datetime column, prefer: column >= DATE 'YYYY-MM-DD' AND column < DATE 'YYYY-MM-DD' + 1, or TRUNC(column) = DATE 'YYYY-MM-DD'.
 - Prefer explicit column lists; include every non-aggregated SELECT column in GROUP BY.
+- If the user asks for a chart/graph/biểu đồ/đồ thị, generate aggregate SQL with exactly two columns: one dimension and one numeric metric.
+- For charted flight counts, prefer COUNT(*) or COUNT(DISTINCT FLIGHTNBR) with GROUP BY on the dimension column.
+- For charted trends over time, use TRUNC(ETD), TRUNC(ETA), TRUNC(ATD), or TRUNC(ATA) as the grouped time bucket.
+- Avoid returning raw per-flight detail rows for chart requests.
 - Do not end SQL statements with a semicolon.
 
 

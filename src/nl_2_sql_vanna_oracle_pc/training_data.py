@@ -81,6 +81,42 @@ ToolMemory(
         """
     },
 ),
+ToolMemory(
+    question="Vẽ biểu đồ số chuyến bay theo sân bay đi hôm nay",
+    tool_name="run_sql",
+    args={
+        "sql": """
+        SELECT FROM_AIRP, COUNT(*) AS FLIGHT_COUNT
+        FROM ATFM.T_DAY_FLIGHTS
+        GROUP BY FROM_AIRP
+        ORDER BY FLIGHT_COUNT DESC
+        """
+    },
+),
+ToolMemory(
+    question="Tạo biểu đồ số chuyến bay theo sân bay đến",
+    tool_name="run_sql",
+    args={
+        "sql": """
+        SELECT TO_AIRP, COUNT(*) AS FLIGHT_COUNT
+        FROM ATFM.T_DAY_FLIGHTS
+        GROUP BY TO_AIRP
+        ORDER BY FLIGHT_COUNT DESC
+        """
+    },
+),
+ToolMemory(
+    question="Vẽ đồ thị số chuyến bay đã hoàn thành theo ngày",
+    tool_name="run_sql",
+    args={
+        "sql": """
+        SELECT TRUNC(ATD) AS FLIGHT_DAY, COUNT(*) AS FLIGHT_COUNT
+        FROM ATFM.T_FINISHED_FLIGHTS
+        GROUP BY TRUNC(ATD)
+        ORDER BY FLIGHT_DAY
+        """
+    },
+),
 ]
 
 

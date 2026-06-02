@@ -18,9 +18,11 @@ from vanna.components import (
 from vanna.core.lifecycle import LifecycleHook
 from vanna.core.storage import ConversationStore
 from vanna.core.tool import ToolContext, ToolResult
+from vanna.tools import VisualizeDataTool
 
 from .content.vi import HITL_THUMBS_DOWN_LABEL, HITL_THUMBS_UP_LABEL
 from .settings import Settings
+from .tool_use import build_chart_title, looks_like_chart_request
 
 if TYPE_CHECKING:
     from vanna.core.tool import Tool
@@ -38,6 +40,9 @@ _tool_context_var: ContextVar[Optional[ToolContext]] = ContextVar(
 )
 _feedback_ui_var: ContextVar[Optional[UiComponent]] = ContextVar(
     "hitl_feedback_ui", default=None
+)
+_chart_ui_var: ContextVar[Optional[UiComponent]] = ContextVar(
+    "hitl_chart_ui", default=None
 )
 # Fallback store: Agent saves a stale conversation object at end of turn and can
 # overwrite metadata.pending_save written by the hook. Keyed by conversation+user.
@@ -167,12 +172,13 @@ class HitlLifecycleHook(LifecycleHook):
     ) -> None:
         self.settings = settings
         self.conversation_store = conversation_store
+        self.visualize_tool = VisualizeDataTool()
 
     async def before_tool(self, tool: "Tool[Any]", context: ToolContext) -> None:
         _tool_context_var.set(context)
 
     async def after_tool(self, result: ToolResult) -> Optional[ToolResult]:
-        if not self.settings.hitl_enabled or not result.success:
+        if not result.success:
             return None
 
         context = _tool_context_var.get()
@@ -190,11 +196,33 @@ class HitlLifecycleHook(LifecycleHook):
             )
             if conversation is None:
                 logger.warning(
-                    "HITL: conversation %s not found", context.conversation_id
+                    "HITL/chart: conversation %s not found", context.conversation_id
                 )
                 return None
 
             question = get_last_user_question(conversation)
+
+            output_file = result.metadata.get("output_file")
+            if isinstance(output_file, str) and output_file and looks_like_chart_request(
+                question
+            ):
+                chart_title = build_chart_title(question)
+                args_schema = self.visualize_tool.get_args_schema()
+                chart_result = await self.visualize_tool.execute(
+                    context, args_schema(filename=output_file, title=chart_title)
+                )
+                if chart_result.success and chart_result.ui_component:
+                    _chart_ui_var.set(chart_result.ui_component)
+                else:
+                    logger.warning(
+                        "Chart generation failed for %s: %s",
+                        output_file,
+                        chart_result.error,
+                    )
+
+            if not self.settings.hitl_enabled:
+                return None
+
             pending = build_pending_save(
                 question=question,
                 tool_name=tool_name,
@@ -231,21 +259,23 @@ class HitlAgent(Agent):
             if rich is None or getattr(rich, "type", None) != ComponentType.DATAFRAME:
                 continue
 
-            _feedback_ui_var.set(None)
-            yield feedback_ui
+            chart_ui = _chart_ui_var.get()
+            if chart_ui is not None:
+                _chart_ui_var.set(None)
+                yield chart_ui
+
+            if feedback_ui is not None:
+                _feedback_ui_var.set(None)
+                yield feedback_ui
 
 
 def create_hitl_hook(
     settings: Settings, conversation_store: ConversationStore
 ) -> Optional[HitlLifecycleHook]:
-    if not settings.hitl_enabled:
-        return None
     return HitlLifecycleHook(
         settings=settings, conversation_store=conversation_store
     )
 
 
 def create_agent_class(settings: Settings):
-    if settings.hitl_enabled:
-        return HitlAgent
-    return Agent
+    return HitlAgent

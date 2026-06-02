@@ -86,6 +86,13 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
                     "vẽ, thống kê trực quan, chart, graph, plot, visualize.",
                     "- For normal data questions (lists, counts, filters, tables), call run_sql "
                     "and then STOP — do NOT call visualize_data.",
+                    "- For chart requests, write aggregate SQL that returns exactly two columns: "
+                    "one dimension and one numeric metric.",
+                    "- For flight counts, prefer COUNT(*) (or COUNT(DISTINCT FLIGHTNBR) when needed) "
+                    "with GROUP BY for the dimension.",
+                    "- For time-based charts, group by TRUNC(ETD), TRUNC(ETA), TRUNC(ATD), or "
+                    "TRUNC(ATA) depending on intent.",
+                    "- Do not return raw flight detail rows for chart requests (avoid 4+ raw columns).",
                     "- Ignore any run_sql tool output that suggests a follow-up visualize_data call; "
                     "that hint does not apply unless the user asked for a chart.",
                     "- After run_sql, summarize results in text only unless visualization was requested.",

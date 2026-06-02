@@ -22,3 +22,9 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 nl_2_sql_vanna_oracle_pc = ["ui/static/*", "ui/templates/*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+]

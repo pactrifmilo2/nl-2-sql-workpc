@@ -11,7 +11,14 @@ DATA_QUESTION_PATTERN = re.compile(
     r"bao nhi[êe]u|h[ôo]m qua|h[ôo]m nay|trong ng[àa]y|"
     r"[đd][ãa]\s+ho[àa]n th[àa]nh|t[ừu]\s.+\s+[đd][ếe]n|"
     r"[đd]i qua|bay qua|s[âa]n bay|flight|flights|"
-    r"top\s+\d+|danh s[áa]ch|t[ìi]m|hi[êe]n th[ịi])",
+    r"top\s+\d+|danh s[áa]ch|t[ìi]m|hi[êe]n th[ịi]|"
+    r"bi[ểe]u [đd][ồo]|[đd][ồo] th[ịi]|chart|graph|plot|v[ẽe]|tr[ựu]c quan)",
+    re.IGNORECASE,
+)
+
+CHART_REQUEST_PATTERN = re.compile(
+    r"(bi[ểe]u [đd][ồo]|[đd][ồo] th[ịi]|chart|graph|plot|"
+    r"v[ẽe]|th[ốo]ng k[êe]\s+tr[ựu]c quan|tr[ựu]c quan h[óo]a|visualize)",
     re.IGNORECASE,
 )
 
@@ -51,6 +58,17 @@ def looks_like_data_question(text: str) -> bool:
     if META_QUESTION_PATTERN.search(text):
         return False
     return bool(DATA_QUESTION_PATTERN.search(text))
+
+
+def looks_like_chart_request(text: str) -> bool:
+    return bool(CHART_REQUEST_PATTERN.search(text))
+
+
+def build_chart_title(question: str) -> str:
+    normalized = " ".join(question.split())
+    if not normalized:
+        return "Biểu đồ dữ liệu chuyến bay"
+    return normalized[:100]
 
 
 def looks_like_deferring_response(text: str) -> bool:

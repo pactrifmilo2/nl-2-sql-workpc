@@ -57,6 +57,9 @@ def build_help_message(*, is_admin: bool) -> str:
         '- "Cho tôi xem dữ liệu chuyến bay tháng trước"\n'
         '- "Sân bay nào có nhiều chuyến bay nhất?"\n'
         '- "Tạo biểu đồ số chuyến bay theo tháng"\n\n'
+        "**Gợi ý cho biểu đồ**\n"
+        '- "Vẽ biểu đồ số chuyến bay theo sân bay đi hôm nay"\n'
+        '- "Tạo đồ thị số chuyến bay đã hoàn thành theo ngày"\n\n'
         "**Lệnh**\n"
         "- `/help` - Hiển thị thông báo trợ giúp này\n"
         "- Sau mỗi truy vấn thành công: 👍 `/save_to_memory` hoặc 👎 `/reject_memory`\n"
