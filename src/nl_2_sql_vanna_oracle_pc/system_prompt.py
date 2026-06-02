@@ -75,4 +75,23 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
                 ]
             )
 
+        if "visualize_data" in tool_names:
+            prompt_parts.extend(
+                [
+                    "",
+                    "Charts and visualize_data (strict):",
+                    "- Call visualize_data ONLY when the user's current message explicitly asks "
+                    "for a chart, graph, plot, or visualization.",
+                    "- Explicit requests include Vietnamese phrases such as: biểu đồ, đồ thị, "
+                    "vẽ, thống kê trực quan, chart, graph, plot, visualize.",
+                    "- For normal data questions (lists, counts, filters, tables), call run_sql "
+                    "and then STOP — do NOT call visualize_data.",
+                    "- Ignore any run_sql tool output that suggests a follow-up visualize_data call; "
+                    "that hint does not apply unless the user asked for a chart.",
+                    "- After run_sql, summarize results in text only unless visualization was requested.",
+                    "- If the user wants a chart, run_sql first (if needed), then call visualize_data "
+                    "with the output_file filename from run_sql metadata.",
+                ]
+            )
+
         return "\n".join(prompt_parts)

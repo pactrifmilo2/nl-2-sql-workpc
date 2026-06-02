@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from vanna import Agent
 from vanna.components import (
-    ButtonComponent,
     ButtonGroupComponent,
     ComponentType,
     UiComponent,
@@ -40,6 +39,27 @@ _tool_context_var: ContextVar[Optional[ToolContext]] = ContextVar(
 _feedback_ui_var: ContextVar[Optional[UiComponent]] = ContextVar(
     "hitl_feedback_ui", default=None
 )
+# Fallback store: Agent saves a stale conversation object at end of turn and can
+# overwrite metadata.pending_save written by the hook. Keyed by conversation+user.
+_pending_saves: Dict[tuple[str, str], Dict[str, Any]] = {}
+
+
+def _pending_key(conversation_id: str, user_id: str) -> tuple[str, str]:
+    return (conversation_id, user_id)
+
+
+def stash_pending_save(
+    conversation_id: str, user_id: str, pending: Dict[str, Any]
+) -> None:
+    _pending_saves[_pending_key(conversation_id, user_id)] = pending
+
+
+def get_pending_save(conversation_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    return _pending_saves.get(_pending_key(conversation_id, user_id))
+
+
+def clear_pending_save(conversation_id: str, user_id: str) -> None:
+    _pending_saves.pop(_pending_key(conversation_id, user_id), None)
 
 
 def is_admin(user: "User") -> bool:
@@ -74,19 +94,21 @@ def build_pending_save(
 
 
 def build_feedback_button_group() -> UiComponent:
+    # ButtonGroupComponent expects flat dicts (see Vanna docs), not ButtonComponent
+    # instances — nested components render as "undefined" in vanna-components.js.
     return UiComponent(
         rich_component=ButtonGroupComponent(
             buttons=[
-                ButtonComponent(
-                    label=HITL_THUMBS_UP_LABEL,
-                    action="/save_to_memory",
-                    variant="primary",
-                ),
-                ButtonComponent(
-                    label=HITL_THUMBS_DOWN_LABEL,
-                    action="/reject_memory",
-                    variant="secondary",
-                ),
+                {
+                    "label": HITL_THUMBS_UP_LABEL,
+                    "action": "/save_to_memory",
+                    "variant": "primary",
+                },
+                {
+                    "label": HITL_THUMBS_DOWN_LABEL,
+                    "action": "/reject_memory",
+                    "variant": "secondary",
+                },
             ],
             orientation="horizontal",
         ),
@@ -181,6 +203,7 @@ class HitlLifecycleHook(LifecycleHook):
             )
             conversation.metadata[PENDING_SAVE_KEY] = pending
             await self.conversation_store.update_conversation(conversation)
+            stash_pending_save(context.conversation_id, context.user.id, pending)
 
             _feedback_ui_var.set(build_feedback_button_group())
             logger.debug(
