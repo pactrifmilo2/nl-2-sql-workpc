@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from vanna import Agent
 from vanna.components import (
-    ButtonComponent,
     ButtonGroupComponent,
     ComponentType,
     UiComponent,
@@ -95,19 +94,21 @@ def build_pending_save(
 
 
 def build_feedback_button_group() -> UiComponent:
+    # ButtonGroupComponent expects flat dicts (see Vanna docs), not ButtonComponent
+    # instances — nested components render as "undefined" in vanna-components.js.
     return UiComponent(
         rich_component=ButtonGroupComponent(
             buttons=[
-                ButtonComponent(
-                    label=HITL_THUMBS_UP_LABEL,
-                    action="/save_to_memory",
-                    variant="primary",
-                ),
-                ButtonComponent(
-                    label=HITL_THUMBS_DOWN_LABEL,
-                    action="/reject_memory",
-                    variant="secondary",
-                ),
+                {
+                    "label": HITL_THUMBS_UP_LABEL,
+                    "action": "/save_to_memory",
+                    "variant": "primary",
+                },
+                {
+                    "label": HITL_THUMBS_DOWN_LABEL,
+                    "action": "/reject_memory",
+                    "variant": "secondary",
+                },
             ],
             orientation="horizontal",
         ),

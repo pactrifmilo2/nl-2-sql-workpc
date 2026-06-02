@@ -15,4 +15,9 @@ wheels/
 # Audit logs
 logs/
 
-# chroma_db/ is tracked (seeded training memory; not ignored)
+# Generated query result artifacts
+**/query_results_*.csv
+
+# Local Chroma runtime data
+chroma_db/
+None/chroma.sqlite3
