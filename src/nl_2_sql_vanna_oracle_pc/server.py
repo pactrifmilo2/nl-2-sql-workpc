@@ -13,6 +13,8 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from vanna.servers.base.templates import get_vanna_component_script
 from vanna.servers.fastapi import VannaFastAPIServer
 
+from .admin_api import create_admin_router
+from .admin_auth import AdminAuth
 from .auth_middleware import BasicAuthMiddleware
 from .content.vi import (
     CHAT_TITLE,
@@ -22,10 +24,13 @@ from .content.vi import (
 )
 from .reports import create_reports_router
 from .settings import settings
+from .training_service import TrainingService
+from .training_store import TrainingStore
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 STATIC_DIR = UI_DIR / "static"
 INDEX_TEMPLATE = UI_DIR / "templates" / "index.html"
+ADMIN_TEMPLATE = UI_DIR / "templates" / "admin.html"
 
 
 class ReportsCORSMiddleware(CORSMiddleware):
@@ -117,6 +122,20 @@ def _replace_index_route(app: FastAPI, html: str) -> None:
 class VannaFastAPIServerWithVoice(VannaFastAPIServer):
     """Vanna FastAPI server with browser speech recognition on the chat input."""
 
+    def __init__(
+        self,
+        agent,
+        config: Dict[str, Any] | None = None,
+        *,
+        admin_auth: AdminAuth,
+        training_store: TrainingStore,
+        training_service: TrainingService,
+    ) -> None:
+        super().__init__(agent, config)
+        self.admin_auth = admin_auth
+        self.training_store = training_store
+        self.training_service = training_service
+
     def create_app(self) -> FastAPI:
         app = super().create_app()
 
@@ -139,6 +158,18 @@ class VannaFastAPIServerWithVoice(VannaFastAPIServer):
         )
         _replace_index_route(app, index_html)
         app.include_router(create_reports_router(settings))
+        app.include_router(
+            create_admin_router(
+                settings=settings,
+                admin_auth=self.admin_auth,
+                store=self.training_store,
+                service=self.training_service,
+            )
+        )
+
+        @app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
+        async def admin_page() -> str:
+            return ADMIN_TEMPLATE.read_text(encoding="utf-8")
 
         if settings.basic_auth_enabled:
             app.add_middleware(

@@ -46,27 +46,27 @@ nl-2-sql-vanna-oracle/
 │   ├── workflow.py            # /help, HITL commands, starter cards
 │   ├── hitl.py                # Lifecycle hook + feedback UI injection
 │   ├── sql_scope.py           # ALLOWED_TABLES validation for training/HITL
-│   ├── auth.py                # Cookie-based user (admin@example.com)
+│   ├── auth.py                # Signed-session admin + cookie-based guest identity
 │   ├── auth_middleware.py     # Optional app HTTP Basic Auth
 │   ├── audit.py               # JSONL audit logger
 │   ├── server.py              # FastAPI + voice UI template
 │   ├── content/vi.py          # Vietnamese strings
 │   └── ui/                    # index.html, voice-input.js
-├── chroma_db/                 # Chroma persist dir (tracked after train.py)
+├── chroma_db/                 # Local Chroma retrieval index (gitignored)
 └── logs/                      # app.log, audit.jsonl, feedback.jsonl (gitignored)
 ```
 
 ## Setup (local)
 
 3. Install deps: `uv sync`
-4. Seed memory (after env is valid): `uv run python train.py`
+4. Synchronize baseline memory (after env is valid): `uv run python train.py`
 5. Run app: `run.bat` or:
    ```bash
    uv run python -m uvicorn nl_2_sql_vanna_oracle_pc.asgi:app --host 0.0.0.0 --port 8000 --reload --reload-dir src --reload-include .env
    ```
-6. Open `http://localhost:8000`. Set cookie `vanna_email=admin@example.com` for admin tools.
+6. Open `http://localhost:8000`. Configure the `ADMIN_*` settings and use `/admin` for reports and reviewed training.
 
-Re-run `train.py` after changing `training_data.py` or `schema_context.py` — it clears the Chroma collection then re-seeds (no duplicates). **Warning:** that also removes admin-approved examples saved from chat. Delete `./chroma_db` only when changing `CHROMA_COLLECTION_NAME` or resetting all collections.
+Re-run `train.py` after changing `training_data.py` or `schema_context.py`. It upserts stable baseline IDs without deleting admin-approved training. Delete `./chroma_db` only when changing `CHROMA_COLLECTION_NAME` or intentionally resetting all collections.
 
 ## Architecture
 
@@ -85,15 +85,15 @@ flowchart LR
 
 ### Human-in-the-loop training (`HITL_ENABLED=true`)
 
-After a successful `run_sql`, all users see 👍 / 👎 buttons in `<vanna-chat>`. Nothing is written to Chroma automatically.
+After a successful `run_sql`, all users see 👍 / 👎 buttons in `<vanna-chat>`. Feedback creates a review candidate. Nothing is written to Chroma until an authenticated admin approves it at `/admin`.
 
 | Action | Who | Effect |
 |--------|-----|--------|
-| 👍 `/save_to_memory` | Everyone clicks | **Admin:** commits Q→SQL to Chroma. **Guest/user:** logs feedback only (`logs/feedback.jsonl`). |
-| 👎 `/reject_memory` | Everyone | Clears pending save, logs negative feedback. Admins see hint to use `/correct_sql`. |
-| `/correct_sql <SQL>` | Admin only | Saves corrected SQL to Chroma (allowlist-validated). |
+| 👍 `/save_to_memory` | Everyone clicks | Logs positive feedback and keeps the Q→SQL candidate pending for admin review. |
+| 👎 `/reject_memory` | Everyone | Clears the pending chat action and logs negative feedback for review. |
+| `/correct_sql <SQL>` | Admin only | Adds corrected SQL to the queue; final approval happens at `/admin`. |
 
-Cookie `vanna_email=admin@example.com` for admin commit. Set `HITL_ENABLED=false` to restore LLM-driven `save_question_tool_args` behavior.
+The signed admin session determines admin access; the `vanna_email` cookie never grants it. Setting `HITL_ENABLED=false` hides the feedback/review staging flow; memory-write tools remain unavailable to the LLM.
 
 ## Configuration
 
@@ -106,6 +106,8 @@ All runtime config comes from **`.env`** via `settings.py` (`load_dotenv()` at i
 | `CHROMA_*` | Persist dir and collection name |
 | `ALLOWED_TABLES` / `ALLOWED_COLUMNS` | SQL scope (comma-separated, uppercased internally) |
 | `APP_BASIC_AUTH_*` | Protect entire FastAPI app |
+| `ADMIN_*` | Signed admin login/session for reports and reviewed training |
+| `TRAINING_*` | Training SQLite path and SQL preview limits |
 | `LOG_*` / `AUDIT_*` | Application and audit logging |
 | `HITL_ENABLED` / `HITL_FEEDBACK_LOG_FILE` | Human approval before memory writes; feedback JSONL |
 
@@ -128,7 +130,7 @@ Reference: `.env.oracle.example`.
 - Never commit secrets (`.env`, passwords, ngrok tokens).
 - SQL is constrained by `ALLOWED_TABLES` / `ALLOWED_COLUMNS` in prompts and training filters—not a substitute for DB-level grants. Assume least-privilege Oracle users in production.
 - `audit_sanitize_tool_parameters` redacts sensitive tool args in audit logs when enabled.
-- `SaveQuestionToolArgsTool` is **admin-only** (`tools.py` access groups). With HITL on, the LLM is instructed not to call it; admins commit via `/save_to_memory` or `/correct_sql`.
+- Memory-write tools are not exposed to the LLM. Reviewed question→SQL examples and durable text memories are committed from `/admin` only.
 
 ## Common agent tasks
 
@@ -145,7 +147,7 @@ Reference: `.env.oracle.example`.
 
 ## What not to do
 
-- Do not commit `logs/`, `.venv/`, or `.env`. Commit `chroma_db/` after `train.py` if you want seeded memory in the repo.
+- Do not commit `logs/`, `.venv/`, `.env`, `data/`, or `chroma_db/`; they contain local runtime state.
 - Do not use non-Oracle SQL dialects (`TOP`, `LIMIT`, `GETDATE()`, etc.) in examples or prompts.
 - Do not add columns or tables outside the ATFM allowlist without updating env, `schema_context.py`, enhancers, and training data together.
 - Do not remove `ForceToolUseMiddleware` / `TextToolCallMiddleware` without validating Ollama native tool calls for your model.
@@ -166,12 +168,12 @@ Reference: `.env.oracle.example`.
 | 401 on remote UI | `APP_BASIC_AUTH_*` or ngrok setup |
 
 ## Testing
-There is no automated test suite in this repo today. After changes, manually run `train.py`, start the server, and exercise a Vietnamese flight question that should hit `run_sql`.
+Run `uv run pytest -q` after changes. For integration checks, synchronize with `train.py`, start the server, and exercise a Vietnamese flight question that should hit `run_sql`.
 
 **HITL manual checks** (with `HITL_ENABLED=true`):
 
 1. Cookie `vanna_email=guest@example.com` → ask a flight question → see 👍/👎 after results → click 👍 → confirm message says feedback recorded (no Chroma commit).
-2. Cookie `vanna_email=admin@example.com` → same flow → 👍 → re-ask a similar question; retrieval should improve.
-3. Admin → 👎 → `/correct_sql SELECT ...` with valid allowlisted SQL → verify via `/memories`.
-4. Confirm `logs/feedback.jsonl` receives events with `committed: true` only for admin saves.
-5. Set `HITL_ENABLED=false` and restart → prior auto-save via `save_question_tool_args` is allowed again in the system prompt.
+2. Sign in at `/admin` → open the training queue → preview and approve the candidate → re-ask a similar question; retrieval should improve.
+3. Admin → edit a candidate to valid allowlisted Oracle SQL → preview → approve → verify in the Memory Library.
+4. Confirm `logs/feedback.jsonl` records feedback and `data/training.sqlite3` records review/audit state.
+5. Disable and re-enable an approved memory; confirm its Chroma retrieval state follows the admin action.

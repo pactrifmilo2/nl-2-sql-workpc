@@ -1,5 +1,25 @@
 # NL2SQL Vanna Oracle
 
+## Admin reports and reviewed training
+
+Configure the admin session in `.env`:
+
+```dotenv
+ADMIN_AUTH_USER=admin
+ADMIN_AUTH_PASSWORD=use-a-strong-password
+ADMIN_SESSION_SECRET=use-a-long-random-secret
+ADMIN_SESSION_COOKIE_SECURE=true
+```
+
+Set `ADMIN_SESSION_COOKIE_SECURE=true` when using HTTPS/ngrok and `false` for plain
+local HTTP. Restart the application and open `/admin`. User 👍/👎 feedback creates a
+review candidate; it does not write to Chroma directly. An admin can inspect or edit
+the Oracle SQL, run a limited preview, and explicitly approve it from the training queue.
+
+The canonical review and audit state is stored in `data/training.sqlite3`. Chroma remains
+the retrieval index. `train.py` now upserts stable baseline records and preserves curated
+training approved from the admin page.
+
 ## AI activity report API
 
 Each user question is recorded in `logs/ai_report.jsonl`. The report includes:

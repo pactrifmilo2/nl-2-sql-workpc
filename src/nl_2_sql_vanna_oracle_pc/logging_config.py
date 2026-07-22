@@ -91,5 +91,9 @@ def log_startup_summary(settings: Settings) -> None:
     )
     if settings.basic_auth_enabled:
         logger.info("HTTP basic auth enabled for app")
+    if settings.admin_auth_enabled:
+        logger.info("Signed admin sessions enabled at /admin")
+    else:
+        logger.warning("Admin reports/training disabled: configure ADMIN_* settings")
     if settings.ollama_basic_auth_enabled:
         logger.info("Ollama basic auth enabled")
