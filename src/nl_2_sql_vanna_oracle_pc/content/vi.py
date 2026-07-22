@@ -1,22 +1,22 @@
 """Vietnamese user-facing copy for the web page and chat workflow."""
 
 # Page shell (ui/templates/index.html, rendered by server.py)
-PAGE_TITLE = "NL to SQL Assistant"
-PAGE_HEADING = "NL to SQL Assistant"
-PAGE_SUBTITLE = "Giao tiếp với Oracle database bằng ngôn ngữ tự nhiên."
-CHAT_TITLE = "Oracle Data Assistant"
+PAGE_TITLE = "Trợ lí AI"
+PAGE_HEADING = "Trợ lí AI"
+PAGE_SUBTITLE = "Hỗ trợ thống kê, tìm kiếm và tổng hợp số liệu"
+CHAT_TITLE = "Trợ lí AI"
 
 # Chat starter UI (workflow.py)
 WELCOME_MESSAGE = (
-    "# Chào mừng bạn đến với Oracle AI\n\n"
-    "Tôi là trợ lý phân tích dữ liệu AI. Hãy hỏi tôi bất cứ điều gì về dữ liệu Oracle "
-    "bằng tiếng Việt!\n\n"
+    "# Chào mừng bạn đến với Trợ lí ảo\n\n"
+    "Tôi là trợ lý phân tích dữ liệu bằng AI. Hãy hỏi tôi bất cứ điều gì"
+    "!\n\n"
     "Gõ `/help` để xem các lệnh có thể dùng."
 )
 
 SETUP_REQUIRED_MESSAGE = (
     "# Cần cấu hình\n\n"
-    "Oracle AI cần được cấu hình trước khi có thể giúp bạn phân tích dữ liệu."
+    "Trợ lí ảo cần được cấu hình trước khi có thể giúp bạn phân tích dữ liệu."
 )
 
 HITL_FEEDBACK_PROMPT = "Kết quả truy vấn có đúng không?"
@@ -75,6 +75,6 @@ def build_help_message(*, is_admin: bool) -> str:
         )
 
     help_content += (
-        "\n\nHãy hỏi tôi bất cứ điều gì về dữ liệu Oracle bằng tiếng Việt!"
+        "\n\nHãy hỏi tôi bất cứ điều gì!"
     )
     return help_content
