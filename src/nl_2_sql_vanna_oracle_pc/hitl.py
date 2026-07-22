@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from vanna import Agent
@@ -23,6 +25,14 @@ from vanna.tools import VisualizeDataTool
 from .content.vi import HITL_THUMBS_DOWN_LABEL, HITL_THUMBS_UP_LABEL
 from .settings import Settings
 from .tool_use import build_chart_title, looks_like_chart_request
+from .reports import (
+    AiReportLogger,
+    ToolExecutionTrace,
+    begin_request_trace,
+    build_request_report_event,
+    end_request_trace,
+    get_request_trace,
+)
 
 if TYPE_CHECKING:
     from vanna.core.tool import Tool
@@ -176,13 +186,32 @@ class HitlLifecycleHook(LifecycleHook):
 
     async def before_tool(self, tool: "Tool[Any]", context: ToolContext) -> None:
         _tool_context_var.set(context)
+        trace = get_request_trace()
+        if trace is not None:
+            trace.request_id = context.request_id
+            trace.current_tool_name = tool.name
 
     async def after_tool(self, result: ToolResult) -> Optional[ToolResult]:
-        if not result.success:
-            return None
-
         context = _tool_context_var.get()
         if context is None:
+            return None
+
+        trace = get_request_trace()
+        if trace is not None and trace.current_tool_name:
+            row_count = result.metadata.get("row_count")
+            trace.tool_executions.append(
+                ToolExecutionTrace(
+                    name=trace.current_tool_name,
+                    success=result.success,
+                    execution_time_ms=float(
+                        result.metadata.get("execution_time_ms", 0.0)
+                    ),
+                    row_count=row_count if isinstance(row_count, int) else None,
+                    error=result.error,
+                )
+            )
+
+        if not result.success:
             return None
 
         tool_name = context.metadata.get(HITL_TOOL_NAME_KEY)
@@ -208,11 +237,23 @@ class HitlLifecycleHook(LifecycleHook):
             ):
                 chart_title = build_chart_title(question)
                 args_schema = self.visualize_tool.get_args_schema()
+                chart_start = perf_counter()
                 chart_result = await self.visualize_tool.execute(
                     context, args_schema(filename=output_file, title=chart_title)
                 )
+                if trace is not None:
+                    trace.tool_executions.append(
+                        ToolExecutionTrace(
+                            name="visualize_data",
+                            success=chart_result.success,
+                            execution_time_ms=(perf_counter() - chart_start) * 1000,
+                            error=chart_result.error,
+                        )
+                    )
                 if chart_result.success and chart_result.ui_component:
                     _chart_ui_var.set(chart_result.ui_component)
+                    if trace is not None:
+                        trace.chart_generated = True
                 else:
                     logger.warning(
                         "Chart generation failed for %s: %s",
@@ -248,25 +289,97 @@ class HitlLifecycleHook(LifecycleHook):
 class HitlAgent(Agent):
     """Yield feedback UI immediately after run_sql dataframe results."""
 
+    def __init__(
+        self,
+        *args: Any,
+        ai_report_logger: AiReportLogger | None = None,
+        ai_report_settings: Settings | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self.ai_report_logger = ai_report_logger
+        self.ai_report_settings = ai_report_settings
+        super().__init__(*args, **kwargs)
+
     async def _send_message(self, *args: Any, **kwargs: Any):
-        async for item in super()._send_message(*args, **kwargs):
-            yield item
-            feedback_ui = _feedback_ui_var.get()
-            if feedback_ui is None:
-                continue
+        request_context = args[0] if args else kwargs.get("request_context")
+        message = args[1] if len(args) > 1 else kwargs.get("message", "")
+        conversation_id = kwargs.get("conversation_id")
+        normalized_message = message.strip().lower() if isinstance(message, str) else ""
+        workflow_commands = {
+            "help",
+            "status",
+            "memories",
+            "recent_memories",
+            "save_to_memory",
+            "reject_memory",
+        }
+        should_report = bool(
+            self.ai_report_logger
+            and self.ai_report_settings
+            and isinstance(message, str)
+            and normalized_message
+            and not normalized_message.startswith("/")
+            and normalized_message not in workflow_commands
+        )
+        if should_report and conversation_id is None:
+            conversation_id = str(uuid.uuid4())
+            kwargs["conversation_id"] = conversation_id
 
-            rich = getattr(item, "rich_component", None)
-            if rich is None or getattr(rich, "type", None) != ComponentType.DATAFRAME:
-                continue
+        trace_token = begin_request_trace() if should_report else None
+        started_at = datetime.now(timezone.utc)
+        started = perf_counter()
+        processing_error: str | None = None
+        stream_completed = False
+        try:
+            async for item in super()._send_message(*args, **kwargs):
+                yield item
+                feedback_ui = _feedback_ui_var.get()
+                if feedback_ui is None:
+                    continue
 
-            chart_ui = _chart_ui_var.get()
-            if chart_ui is not None:
-                _chart_ui_var.set(None)
-                yield chart_ui
+                rich = getattr(item, "rich_component", None)
+                if rich is None or getattr(rich, "type", None) != ComponentType.DATAFRAME:
+                    continue
 
-            if feedback_ui is not None:
+                chart_ui = _chart_ui_var.get()
+                if chart_ui is not None:
+                    _chart_ui_var.set(None)
+                    yield chart_ui
+
                 _feedback_ui_var.set(None)
                 yield feedback_ui
+            stream_completed = True
+        except Exception as exc:
+            processing_error = str(exc)
+            raise
+        finally:
+            if should_report and trace_token is not None:
+                trace = get_request_trace()
+                try:
+                    if trace is None:
+                        raise RuntimeError("AI report trace was not initialized")
+                    if not stream_completed and processing_error is None:
+                        processing_error = "Response stream did not complete"
+                    user = await self.user_resolver.resolve_user(request_context)
+                    conversation = await self.conversation_store.get_conversation(
+                        conversation_id, user
+                    )
+                    event = build_request_report_event(
+                        settings=self.ai_report_settings,
+                        conversation=conversation,
+                        conversation_id=conversation_id,
+                        user_id=user.id,
+                        question=message.strip(),
+                        started_at=started_at,
+                        duration_ms=(perf_counter() - started) * 1000,
+                        trace=trace,
+                        processing_error=processing_error,
+                    )
+                    self.ai_report_logger.log(event)
+                except Exception as exc:
+                    logger.error("Failed to build AI report event: %s", exc, exc_info=True)
+                finally:
+                    end_request_trace(trace_token)
 
 
 def create_hitl_hook(

@@ -17,6 +17,12 @@ def parse_csv_env(name: str) -> set[str]:
     }
 
 
+def parse_csv_values(name: str) -> tuple[str, ...]:
+    return tuple(
+        value.strip() for value in getenv(name, "").split(",") if value.strip()
+    )
+
+
 def default_allowed_columns() -> set[str]:
     configured = parse_csv_env("ALLOWED_COLUMNS")
     return configured or set(ALLOWED_COLUMNS)
@@ -74,6 +80,22 @@ class Settings:
     allowed_columns: set[str] = field(default_factory=default_allowed_columns)
 
     speech_recognition_lang: str = getenv("SPEECH_RECOGNITION_LANG", "vi-VN")
+
+    report_api_key: str = getenv("REPORT_API_KEY", "").strip()
+    report_api_cors_origins: tuple[str, ...] = field(
+        default_factory=lambda: parse_csv_values("REPORT_API_CORS_ORIGINS")
+    )
+    ai_report_enabled: bool = field(
+        default_factory=lambda: parse_bool_env("AI_REPORT_ENABLED", default=True)
+    )
+    ai_report_log_file: str = getenv(
+        "AI_REPORT_LOG_FILE", "logs/ai_report.jsonl"
+    ).strip()
+    ai_report_include_response_text: bool = field(
+        default_factory=lambda: parse_bool_env(
+            "AI_REPORT_INCLUDE_RESPONSE_TEXT", default=True
+        )
+    )
 
     app_basic_auth_user: str = getenv("APP_BASIC_AUTH_USER", "").strip()
     app_basic_auth_password: str = getenv("APP_BASIC_AUTH_PASSWORD", "")

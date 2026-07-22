@@ -20,6 +20,7 @@ from .llm_context import (
 from .llm import create_llm_service
 from .llm_middleware import ForceToolUseMiddleware
 from .memory import create_agent_memory
+from .reports import create_ai_report_logger
 from .settings import settings
 from .system_prompt import AtfmSystemPromptBuilder
 from .tools import create_tool_registry
@@ -35,6 +36,7 @@ def create_agent():
     tools = create_tool_registry(db_tool)
     conversation_store = MemoryConversationStore()
     feedback_logger = create_feedback_logger(settings)
+    ai_report_logger = create_ai_report_logger(settings)
 
     llm_context_enhancer = CombinedEnhancer(
         [
@@ -64,6 +66,8 @@ def create_agent():
         llm_middlewares=[ForceToolUseMiddleware(llm)],
         workflow_handler=create_workflow_handler(settings, feedback_logger),
         lifecycle_hooks=lifecycle_hooks,
+        ai_report_logger=ai_report_logger,
+        ai_report_settings=settings,
     )
 
 

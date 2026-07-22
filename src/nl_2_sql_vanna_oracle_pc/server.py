@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import Any, Dict
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
+from starlette.types import ASGIApp, Receive, Scope, Send
 from vanna.servers.base.templates import get_vanna_component_script
 from vanna.servers.fastapi import VannaFastAPIServer
 
@@ -18,11 +20,27 @@ from .content.vi import (
     PAGE_SUBTITLE,
     PAGE_TITLE,
 )
+from .reports import create_reports_router
 from .settings import settings
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 STATIC_DIR = UI_DIR / "static"
 INDEX_TEMPLATE = UI_DIR / "templates" / "index.html"
+
+
+class ReportsCORSMiddleware(CORSMiddleware):
+    """Apply cross-origin access only to the dedicated report API."""
+
+    def __init__(self, app: ASGIApp, **kwargs: Any):
+        super().__init__(app, **kwargs)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or not scope.get("path", "").startswith(
+            "/api/reports/"
+        ):
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
 
 
 def get_local_index_html(
@@ -120,12 +138,27 @@ class VannaFastAPIServerWithVoice(VannaFastAPIServer):
             speech_lang=settings.speech_recognition_lang,
         )
         _replace_index_route(app, index_html)
+        app.include_router(create_reports_router(settings))
 
         if settings.basic_auth_enabled:
             app.add_middleware(
                 BasicAuthMiddleware,
                 username=settings.app_basic_auth_user,
                 password=settings.app_basic_auth_password,
+            )
+
+        if settings.report_api_cors_origins:
+            app.add_middleware(
+                ReportsCORSMiddleware,
+                allow_origins=list(settings.report_api_cors_origins),
+                allow_credentials=True,
+                allow_methods=["GET"],
+                allow_headers=[
+                    "Accept",
+                    "Authorization",
+                    "Content-Type",
+                    "X-API-Key",
+                ],
             )
 
         return app
