@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from vanna.core.tool import Tool
     from vanna.core.storage import Conversation
     from vanna.core.user.models import User
+    from .training_store import TrainingStore
 
 logger = logging.getLogger(__name__)
 
@@ -134,9 +135,14 @@ def build_feedback_button_group() -> UiComponent:
 class FeedbackLogger:
     """Append HITL feedback events as JSON lines."""
 
-    def __init__(self, log_file_path: str | Path) -> None:
+    def __init__(
+        self,
+        log_file_path: str | Path,
+        training_store: TrainingStore | None = None,
+    ) -> None:
         self.log_file = Path(log_file_path)
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
+        self.training_store = training_store
 
     def log(
         self,
@@ -163,12 +169,31 @@ class FeedbackLogger:
                 handle.write(line)
         except Exception as exc:
             logger.error("Failed to write feedback event: %s", exc, exc_info=True)
+            return
+        if self.training_store is not None:
+            try:
+                self.training_store.record_feedback(
+                    conversation_id=conversation_id,
+                    question=question,
+                    sql=sql,
+                    action=action,
+                    user_id=user_id,
+                )
+            except Exception as exc:
+                logger.error(
+                    "Failed to update training candidate feedback: %s",
+                    exc,
+                    exc_info=True,
+                )
 
 
-def create_feedback_logger(settings: Settings) -> Optional[FeedbackLogger]:
+def create_feedback_logger(
+    settings: Settings,
+    training_store: TrainingStore | None = None,
+) -> Optional[FeedbackLogger]:
     if not settings.hitl_feedback_log_file:
         return None
-    return FeedbackLogger(settings.hitl_feedback_log_file)
+    return FeedbackLogger(settings.hitl_feedback_log_file, training_store)
 
 
 class HitlLifecycleHook(LifecycleHook):

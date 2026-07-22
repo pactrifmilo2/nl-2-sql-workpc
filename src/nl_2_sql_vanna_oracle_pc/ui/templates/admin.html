@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Quản trị AI · NL to SQL</title>
+    <link rel="stylesheet" href="/static/admin.css">
+    <script src="/static/admin.js" defer></script>
+</head>
+<body>
+    <main class="page">
+        <section id="login-view" class="auth-card" hidden>
+            <p class="eyebrow">NL TO SQL</p>
+            <h1>Đăng nhập quản trị</h1>
+            <p id="login-help" class="muted">Đăng nhập để xem báo cáo và duyệt dữ liệu huấn luyện.</p>
+            <form id="login-form">
+                <label>Tài khoản<input id="login-username" autocomplete="username" required></label>
+                <label>Mật khẩu<input id="login-password" type="password" autocomplete="current-password" required></label>
+                <button type="submit" class="primary">Đăng nhập</button>
+            </form>
+            <p id="login-error" class="error" role="alert"></p>
+        </section>
+
+        <section id="admin-view" hidden>
+            <header class="topbar">
+                <div>
+                    <p class="eyebrow">NL TO SQL · ADMIN</p>
+                    <h1>AI Operations</h1>
+                    <p class="muted">Theo dõi hoạt động, duyệt huấn luyện và quản lý bộ nhớ.</p>
+                </div>
+                <div class="top-actions">
+                    <span id="admin-user" class="user-pill"></span>
+                    <a href="/" class="secondary button-link">Mở chat</a>
+                    <button id="logout-button" class="secondary">Đăng xuất</button>
+                </div>
+            </header>
+
+            <nav class="tabs" aria-label="Admin sections">
+                <button class="tab active" data-tab="reports">Báo cáo</button>
+                <button class="tab" data-tab="training">Hàng chờ huấn luyện</button>
+                <button class="tab" data-tab="memories">Bộ nhớ</button>
+                <button class="tab" data-tab="audit">Nhật ký</button>
+            </nav>
+
+            <p id="notice" class="notice" hidden></p>
+
+            <section id="tab-reports" class="panel tab-panel">
+                <div id="summary-cards" class="summary-grid"></div>
+                <div class="section-heading">
+                    <div><h2>Yêu cầu gần đây</h2><p class="muted">Mỗi truy vấn có SQL sẽ tự động trở thành ứng viên đánh giá.</p></div>
+                    <button id="refresh-reports" class="secondary">Làm mới</button>
+                </div>
+                <div class="table-wrap"><table><thead><tr><th>Thời gian</th><th>Câu hỏi</th><th>Kết quả</th><th>Phản hồi</th><th>Huấn luyện</th><th></th></tr></thead><tbody id="reports-body"></tbody></table></div>
+            </section>
+
+            <section id="tab-training" class="panel tab-panel" hidden>
+                <div class="section-heading">
+                    <div><h2>Hàng chờ huấn luyện</h2><p class="muted">Chỉ bản ghi được kiểm tra và phê duyệt mới được đồng bộ vào Chroma.</p></div>
+                    <div class="inline-actions">
+                        <select id="candidate-status" aria-label="Lọc trạng thái"><option value="">Tất cả</option><option value="pending">Chờ duyệt</option><option value="corrected">Đã sửa</option><option value="approved">Đã duyệt</option><option value="rejected">Đã từ chối</option></select>
+                        <button id="refresh-candidates" class="secondary">Làm mới</button>
+                    </div>
+                </div>
+                <details class="creator"><summary>Thêm mẫu câu hỏi → SQL thủ công</summary><form id="manual-candidate-form"><label>Câu hỏi<textarea id="manual-question" required></textarea></label><label>Oracle SQL<textarea id="manual-sql" class="code" required></textarea></label><label>Ghi chú<textarea id="manual-notes"></textarea></label><button class="primary" type="submit">Thêm vào hàng chờ</button></form></details>
+                <div class="table-wrap"><table><thead><tr><th>Cập nhật</th><th>Câu hỏi</th><th>Phản hồi</th><th>Kiểm tra</th><th>Trạng thái</th><th></th></tr></thead><tbody id="candidates-body"></tbody></table></div>
+            </section>
+
+            <section id="tab-memories" class="panel tab-panel" hidden>
+                <div class="section-heading"><div><h2>Thư viện bộ nhớ</h2><p class="muted">Nguồn chuẩn của các mẫu baseline và các mẫu đã được quản trị viên duyệt.</p></div><button id="refresh-memories" class="secondary">Làm mới</button></div>
+                <details class="creator"><summary>Thêm ghi chú nghiệp vụ / schema</summary><form id="text-memory-form"><label>Nội dung bền vững<textarea id="text-memory-content" required minlength="10"></textarea></label><button class="primary" type="submit">Lưu bộ nhớ</button></form></details>
+                <div class="table-wrap"><table><thead><tr><th>Cập nhật</th><th>Loại</th><th>Nguồn</th><th>Nội dung</th><th>Trạng thái</th><th></th></tr></thead><tbody id="memories-body"></tbody></table></div>
+            </section>
+
+            <section id="tab-audit" class="panel tab-panel" hidden>
+                <div class="section-heading"><div><h2>Nhật ký huấn luyện</h2><p class="muted">Dấu vết ai đã duyệt, từ chối hoặc vô hiệu hóa bộ nhớ.</p></div><button id="refresh-audit" class="secondary">Làm mới</button></div>
+                <div class="table-wrap"><table><thead><tr><th>Thời gian</th><th>Người thực hiện</th><th>Hành động</th><th>Đối tượng</th></tr></thead><tbody id="audit-body"></tbody></table></div>
+            </section>
+        </section>
+    </main>
+
+    <dialog id="candidate-dialog">
+        <form method="dialog" class="dialog-close"><button aria-label="Đóng">×</button></form>
+        <p class="eyebrow">TRAINING REVIEW</p>
+        <h2>Duyệt mẫu SQL</h2>
+        <input id="review-id" type="hidden">
+        <label>Câu hỏi<textarea id="review-question" readonly></textarea></label>
+        <label>Oracle SQL<textarea id="review-sql" class="code"></textarea></label>
+        <label>Ghi chú của quản trị viên<textarea id="review-notes"></textarea></label>
+        <div id="review-meta" class="review-meta"></div>
+        <div id="preview-result" class="preview" hidden></div>
+        <div class="dialog-actions">
+            <button id="preview-button" class="secondary" type="button">Kiểm tra SQL</button>
+            <button id="reject-button" class="danger" type="button">Từ chối</button>
+            <button id="approve-button" class="primary" type="button">Kiểm tra và phê duyệt</button>
+        </div>
+    </dialog>
+</body>
+</html>

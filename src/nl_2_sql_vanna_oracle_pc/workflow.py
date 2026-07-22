@@ -3,7 +3,6 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from vanna.components import RichTextComponent, UiComponent
-from vanna.core.tool import ToolContext
 from vanna.core.workflow import DefaultWorkflowHandler, WorkflowResult
 
 from .content.vi import (
@@ -107,28 +106,8 @@ class AtfmWorkflowHandler(DefaultWorkflowHandler):
 
         sql = pending.get("args", {}).get("sql", "")
         question = pending.get("question", "")
-        user_is_admin = is_admin(user)
-        committed = False
         content = HITL_SAVE_SUCCESS_USER
-
-        if user_is_admin:
-            if not uses_only_allowed_tables(sql, self.settings.allowed_tables):
-                return self._text_response(HITL_SAVE_INVALID_SQL)
-
-            context = ToolContext(
-                user=user,
-                conversation_id=conversation.id,
-                request_id=conversation.id,
-                agent_memory=agent.agent_memory,
-            )
-            await agent.agent_memory.save_tool_usage(
-                question=question,
-                tool_name=pending.get("tool_name", "run_sql"),
-                args=pending.get("args", {}),
-                context=context,
-                success=True,
-            )
-            committed = True
+        if is_admin(user):
             content = HITL_SAVE_SUCCESS_ADMIN
 
         self._log_feedback(
@@ -137,7 +116,7 @@ class AtfmWorkflowHandler(DefaultWorkflowHandler):
             question=question,
             sql=sql,
             action="approve",
-            committed=committed,
+            committed=False,
         )
         conversation.metadata.pop(PENDING_SAVE_KEY, None)
         clear_pending_save(conversation.id, user.id)
@@ -202,28 +181,13 @@ class AtfmWorkflowHandler(DefaultWorkflowHandler):
         if not question:
             return self._text_response(HITL_SAVE_NO_PENDING)
 
-        args = {"sql": sql}
-        context = ToolContext(
-            user=user,
-            conversation_id=conversation.id,
-            request_id=conversation.id,
-            agent_memory=agent.agent_memory,
-        )
-        await agent.agent_memory.save_tool_usage(
-            question=question,
-            tool_name="run_sql",
-            args=args,
-            context=context,
-            success=True,
-        )
-
         self._log_feedback(
             user_id=user.id,
             conversation_id=conversation.id,
             question=question,
             sql=sql,
             action="correct",
-            committed=True,
+            committed=False,
         )
         conversation.metadata.pop(PENDING_SAVE_KEY, None)
         clear_pending_save(conversation.id, user.id)
