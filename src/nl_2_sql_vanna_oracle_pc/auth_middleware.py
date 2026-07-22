@@ -5,30 +5,41 @@ from __future__ import annotations
 import base64
 import secrets
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
+from starlette.datastructures import Headers
 from starlette.responses import Response
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 
-class BasicAuthMiddleware(BaseHTTPMiddleware):
+class BasicAuthMiddleware:
     def __init__(self, app: ASGIApp, username: str, password: str):
-        super().__init__(app)
+        self.app = app
         self.username = username
         self.password = password
 
-    async def dispatch(self, request: Request, call_next):
-        if self._authorized(request):
-            return await call_next(request)
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in {"http", "websocket"} or self._authorized(scope):
+            await self.app(scope, receive, send)
+            return
 
-        return Response(
+        if scope["type"] == "websocket":
+            await send(
+                {
+                    "type": "websocket.close",
+                    "code": 1008,
+                    "reason": "Authentication required",
+                }
+            )
+            return
+
+        response = Response(
             status_code=401,
             headers={"WWW-Authenticate": 'Basic realm="NL2SQL"'},
             content="Authentication required",
         )
+        await response(scope, receive, send)
 
-    def _authorized(self, request: Request) -> bool:
-        header = request.headers.get("Authorization", "")
+    def _authorized(self, scope: Scope) -> bool:
+        header = Headers(scope=scope).get("Authorization", "")
         if not header.startswith("Basic "):
             return False
 

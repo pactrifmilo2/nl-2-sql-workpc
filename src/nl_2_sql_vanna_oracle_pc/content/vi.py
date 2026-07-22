@@ -24,12 +24,11 @@ HITL_THUMBS_UP_LABEL = "👍 Đúng"
 HITL_THUMBS_DOWN_LABEL = "👎 Không đúng"
 
 HITL_SAVE_SUCCESS_ADMIN = (
-    "Đã lưu mẫu câu hỏi → SQL vào bộ nhớ. Các truy vấn tương tự sẽ dùng mẫu này."
+    "Đã đưa mẫu câu hỏi → SQL vào hàng chờ huấn luyện. "
+    "Hãy mở trang quản trị để kiểm tra và phê duyệt."
 )
 HITL_SAVE_SUCCESS_USER = (
-    "Cảm ơn phản hồi tích cực! Phản hồi của bạn đã được ghi vào nhật ký hệ thống.\n\n"
-    "**Lưu ý:** Chỉ quản trị viên mới có thể ghi mẫu câu hỏi → SQL vào bộ nhớ Chroma "
-    "(để agent học cho mọi người). Bạn vẫn có thể dùng 👍/👎 bình thường."
+    "Cảm ơn phản hồi tích cực! Mẫu này đã được đưa vào hàng chờ để quản trị viên xem xét."
 )
 HITL_SAVE_NO_PENDING = "Không có truy vấn nào đang chờ lưu. Hãy chạy một câu hỏi dữ liệu trước."
 HITL_SAVE_INVALID_SQL = (
@@ -42,7 +41,9 @@ HITL_REJECT_ADMIN_HINT = (
     "\n\nQuản trị viên có thể gửi SQL đúng bằng lệnh:\n"
     "`/correct_sql SELECT ...`"
 )
-HITL_CORRECT_SUCCESS = "Đã lưu SQL đã chỉnh sửa vào bộ nhớ."
+HITL_CORRECT_SUCCESS = (
+    "Đã đưa SQL chỉnh sửa vào hàng chờ. Hãy phê duyệt trên trang quản trị."
+)
 HITL_CORRECT_DENIED = "Chỉ quản trị viên mới có thể dùng `/correct_sql`."
 HITL_CORRECT_USAGE = (
     "Cú pháp: `/correct_sql` theo sau là câu SQL Oracle (một dòng hoặc nhiều dòng)."

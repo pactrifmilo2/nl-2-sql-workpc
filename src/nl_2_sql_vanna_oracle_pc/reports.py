@@ -12,11 +12,14 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Header, HTTPException, Query, status
 
 from .settings import Settings
+
+if TYPE_CHECKING:
+    from .training_store import TrainingStore
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +64,15 @@ def end_request_trace(token: Token[RequestTrace | None]) -> None:
 class AiReportLogger:
     """Append one privacy-controlled JSON record per user question."""
 
-    def __init__(self, log_file_path: str | Path) -> None:
+    def __init__(
+        self,
+        log_file_path: str | Path,
+        training_store: TrainingStore | None = None,
+    ) -> None:
         self.log_file = Path(log_file_path)
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
         self._write_lock = threading.Lock()
+        self.training_store = training_store
 
     def log(self, event: dict[str, Any]) -> None:
         try:
@@ -73,12 +81,23 @@ class AiReportLogger:
                 handle.write(line)
         except Exception as exc:
             logger.error("Failed to write AI report event: %s", exc, exc_info=True)
+            return
+        if self.training_store is not None:
+            try:
+                self.training_store.ingest_report(event)
+            except Exception as exc:
+                logger.error(
+                    "Failed to create training candidate: %s", exc, exc_info=True
+                )
 
 
-def create_ai_report_logger(settings: Settings) -> AiReportLogger | None:
+def create_ai_report_logger(
+    settings: Settings,
+    training_store: TrainingStore | None = None,
+) -> AiReportLogger | None:
     if not settings.ai_report_enabled or not settings.ai_report_log_file:
         return None
-    return AiReportLogger(settings.ai_report_log_file)
+    return AiReportLogger(settings.ai_report_log_file, training_store)
 
 
 def _sanitized_arguments(arguments: dict[str, Any]) -> dict[str, Any]:

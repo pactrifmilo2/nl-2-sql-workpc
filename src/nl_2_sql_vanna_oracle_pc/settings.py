@@ -46,6 +46,16 @@ def parse_bool_env(name: str, default: bool = True) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def parse_int_env(name: str, default: int, minimum: int = 1) -> int:
+    raw = getenv(name)
+    if raw is None:
+        return default
+    try:
+        return max(minimum, int(raw))
+    except ValueError:
+        return default
+
+
 def build_ollama_host() -> str:
     """Return Ollama base URL without embedded credentials."""
     host = getenv("OLLAMA_HOST", "http://127.0.0.1:11434").strip()
@@ -100,6 +110,33 @@ class Settings:
     app_basic_auth_user: str = getenv("APP_BASIC_AUTH_USER", "").strip()
     app_basic_auth_password: str = getenv("APP_BASIC_AUTH_PASSWORD", "")
 
+    admin_auth_user: str = getenv("ADMIN_AUTH_USER", "").strip()
+    admin_auth_password: str = getenv("ADMIN_AUTH_PASSWORD", "")
+    admin_session_secret: str = getenv("ADMIN_SESSION_SECRET", "")
+    admin_session_cookie_name: str = getenv(
+        "ADMIN_SESSION_COOKIE_NAME", "nl2sql_admin_session"
+    ).strip()
+    admin_session_cookie_secure: bool = field(
+        default_factory=lambda: parse_bool_env(
+            "ADMIN_SESSION_COOKIE_SECURE", default=False
+        )
+    )
+    admin_session_ttl_hours: int = field(
+        default_factory=lambda: parse_int_env("ADMIN_SESSION_TTL_HOURS", 8)
+    )
+
+    training_db_file: str = getenv(
+        "TRAINING_DB_FILE", "data/training.sqlite3"
+    ).strip()
+    training_preview_row_limit: int = field(
+        default_factory=lambda: parse_int_env("TRAINING_PREVIEW_ROW_LIMIT", 50)
+    )
+    training_preview_timeout_seconds: int = field(
+        default_factory=lambda: parse_int_env(
+            "TRAINING_PREVIEW_TIMEOUT_SECONDS", 30
+        )
+    )
+
     audit_enabled: bool = field(
         default_factory=lambda: parse_bool_env("AUDIT_ENABLED", default=True)
     )
@@ -141,6 +178,14 @@ class Settings:
     @property
     def basic_auth_enabled(self) -> bool:
         return bool(self.app_basic_auth_user and self.app_basic_auth_password)
+
+    @property
+    def admin_auth_enabled(self) -> bool:
+        return bool(
+            self.admin_auth_user
+            and self.admin_auth_password
+            and len(self.admin_session_secret) >= 32
+        )
 
     @property
     def ollama_basic_auth_enabled(self) -> bool:
