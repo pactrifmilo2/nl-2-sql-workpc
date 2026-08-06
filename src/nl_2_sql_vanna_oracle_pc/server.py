@@ -52,7 +52,7 @@ def get_local_index_html(
     *,
     dev_mode: bool = False,
     static_path: str = "/static",
-    cdn_url: str = "https://img.vanna.ai/vanna-components.js",
+    cdn_url: str = "/static/vanna-components.js",
     api_base_url: str = "",
     page_title: str = PAGE_TITLE,
     page_heading: str = PAGE_HEADING,
@@ -82,7 +82,7 @@ def get_index_html_with_voice(
     *,
     dev_mode: bool = False,
     static_path: str = "/static",
-    cdn_url: str = "https://img.vanna.ai/vanna-components.js",
+    cdn_url: str = "/static/vanna-components.js",
     api_base_url: str = "",
     speech_lang: str = "vi-VN",
 ) -> str:
@@ -151,7 +151,7 @@ class VannaFastAPIServerWithVoice(VannaFastAPIServer):
             dev_mode=server_config.get("dev_mode", False),
             static_path="/static",
             cdn_url=server_config.get(
-                "cdn_url", "https://img.vanna.ai/vanna-components.js"
+                "cdn_url", "/static/vanna-components.js"
             ),
             api_base_url=server_config.get("api_base_url", ""),
             speech_lang=settings.speech_recognition_lang,
