@@ -1,0 +1,22 @@
+<service>
+  <id>Nl2SqlVannaOracle</id>
+  <name>NL2SQL Vanna Oracle</name>
+  <description>Vietnamese natural-language to Oracle SQL service</description>
+
+  <executable>%BASE%\.venv\Scripts\python.exe</executable>
+  <arguments>-m uvicorn nl_2_sql_vanna_oracle_pc.asgi:app --host 0.0.0.0 --port {{PORT}} --workers 1</arguments>
+  <workingdirectory>%BASE%</workingdirectory>
+
+  <startmode>Automatic</startmode>
+  <delayedAutoStart/>
+  <stoptimeout>30 sec</stoptimeout>
+  <stopparentprocessfirst>true</stopparentprocessfirst>
+  <env name="PYTHONUNBUFFERED" value="1"/>
+
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+
+  <logpath>%BASE%\service-logs</logpath>
+  <log mode="roll"/>
+</service>
+

@@ -1,1 +1,6 @@
-3.12
+Set-Location "D:\Coding projects\nl-2-sql-workpc"
+
+$ReleaseRoot = "D:\releases\nl2sql-0.1.2"
+$Wheels = @(Get-ChildItem "$ReleaseRoot\app\*.whl")
+
+$Wheels3.12
