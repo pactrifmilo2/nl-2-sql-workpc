@@ -12,6 +12,7 @@ from vanna.core.llm import LlmRequest, LlmResponse, LlmService
 from vanna.core.middleware import LlmMiddleware
 from vanna.core.tool import ToolCall
 
+from .clarification_policy import find_required_clarification
 from .content.vi import CLARIFICATION_TOOL_RESULT, CLARIFICATION_WAIT_MESSAGE
 from .tool_use import build_force_tool_request, should_force_tool_use
 
@@ -35,6 +36,7 @@ class ForceToolUseMiddleware(LlmMiddleware):
             request, response
         )
         response = _prefer_clarification(response)
+        response = _enforce_required_clarification(request, response)
 
         if _follows_clarification_tool(request):
             if response.is_tool_call():
@@ -60,6 +62,10 @@ class ForceToolUseMiddleware(LlmMiddleware):
             retry_request, retry_response
         )
         retry_response = _prefer_clarification(retry_response)
+        retry_response = _enforce_required_clarification(
+            retry_request,
+            retry_response,
+        )
         if retry_response.is_tool_call():
             logger.info(
                 "Force-action retry produced tool call(s): %s",
@@ -87,6 +93,44 @@ def _prefer_clarification(response: LlmResponse) -> LlmResponse:
         )
     return response.model_copy(
         update={"content": None, "tool_calls": [clarification_calls[0]]}
+    )
+
+
+def _enforce_required_clarification(
+    request: LlmRequest,
+    response: LlmResponse,
+) -> LlmResponse:
+    """Replace unsafe model guesses for known ambiguities with clarification."""
+
+    available_tools = {tool.name for tool in (request.tools or [])}
+    if "ask_clarification" not in available_tools:
+        return response
+
+    requirement = find_required_clarification(request.messages)
+    if requirement is None:
+        return response
+
+    if any(
+        call.name == "ask_clarification"
+        for call in (response.tool_calls or [])
+    ):
+        return response
+
+    logger.info(
+        "Enforcing clarification before tool execution: kind=%s",
+        requirement.kind,
+    )
+    return response.model_copy(
+        update={
+            "content": None,
+            "tool_calls": [
+                ToolCall(
+                    id=f"clarify_{uuid.uuid4().hex[:8]}",
+                    name="ask_clarification",
+                    arguments=requirement.to_tool_arguments(),
+                )
+            ],
+        }
     )
 
 
