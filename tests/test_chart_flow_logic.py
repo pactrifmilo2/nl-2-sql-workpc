@@ -48,6 +48,23 @@ def test_visualize_data_json_tool_call_is_parsed() -> None:
     assert tool_calls[0].arguments["filename"] == "query_abcd.csv"
 
 
+def test_clarification_json_tool_call_is_parsed() -> None:
+    payload = (
+        '{"name":"ask_clarification","arguments":'
+        '{"question":"Bạn muốn xem ngày nào?","options":'
+        '[{"label":"Hôm nay","message":"Xem chuyến bay hôm nay"}]}}'
+    )
+
+    tool_calls = _parse_json_tool_calls(
+        payload,
+        {"run_sql", "ask_clarification"},
+    )
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0].name == "ask_clarification"
+    assert tool_calls[0].arguments["options"][0]["label"] == "Hôm nay"
+
+
 @pytest.mark.asyncio
 async def test_system_prompt_includes_chart_rules_only_when_tool_present() -> None:
     builder = AtfmSystemPromptBuilder()
@@ -66,3 +83,25 @@ async def test_system_prompt_includes_chart_rules_only_when_tool_present() -> No
     )
     assert prompt_without_chart is not None
     assert "Charts and visualize_data (strict):" not in prompt_without_chart
+
+
+@pytest.mark.asyncio
+async def test_system_prompt_includes_clarification_rules_only_when_tool_present() -> None:
+    builder = AtfmSystemPromptBuilder()
+    user = _FakeUser()
+
+    prompt_with_clarification = await builder.build_system_prompt(
+        user=user,
+        tools=[_FakeTool("run_sql"), _FakeTool("ask_clarification")],
+    )
+    assert prompt_with_clarification is not None
+    assert "Clarification (strict):" in prompt_with_clarification
+    assert "Do not call run_sql in the same turn" in prompt_with_clarification
+
+    prompt_without_clarification = await builder.build_system_prompt(
+        user=user,
+        tools=[_FakeTool("run_sql")],
+    )
+    assert prompt_without_clarification is not None
+    assert "Clarification (strict):" not in prompt_without_clarification
+    assert "ask_clarification" not in prompt_without_clarification

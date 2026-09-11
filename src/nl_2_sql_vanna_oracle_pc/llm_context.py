@@ -38,9 +38,11 @@ Rules:
 - Map Vietnamese terms to columns: số hiệu chuyến bay=FLIGHTNBR, sân bay đi/điểm đi=FROM_AIRP, sân bay đến/điểm đến=TO_AIRP, giờ cất cánh dự kiến=ETD, giờ hạ cánh dự kiến=ETA, điểm qua cảnh/bay qua=VIA, giờ cất cánh thực tế=ATD, giờ hạ cánh thực tế=ATA.
 - Map Vietnamese table intent: chuyến bay trong ngày/hôm nay=ATFM.T_DAY_FLIGHTS; chuyến bay đã hoàn thành=ATFM.T_FINISHED_FLIGHTS.
 - Treat the table and column lists above as the complete schema. Do not infer, mention, join, or query anything outside them.
-- Never ask the user if they want to run the query; you MUST call the run_sql tool to execute the query.
-- Never suggest a rephrased or example question — execute run_sql for the question as asked.
-- Never say you will search or help later — call run_sql in your first response.
+- Call run_sql immediately when the user's intent is sufficiently clear.
+- If missing or ambiguous information would materially change the table, filters, grouping, or meaning, call ask_clarification before run_sql.
+- Ask exactly one focused Vietnamese clarification question and offer two or three common choices when useful.
+- Never ask whether the user wants to run the query, and never ask for optional filters or confirmation once the intent is clear.
+- Never suggest generic rephrased/example questions or say you will help later.
 - Always use schema-qualified table names (ATFM.T_DAY_FLIGHTS or ATFM.T_FINISHED_FLIGHTS).
 - SELECT only the columns needed from the allowed column list; never use SELECT * and never reference other columns.
 - ATD and ATA apply to completed flights (ATFM.T_FINISHED_FLIGHTS). For same-day scheduled flights use ATFM.T_DAY_FLIGHTS with ETD and ETA.
@@ -105,7 +107,9 @@ class ToolMemoryContextEnhancer(LlmContextEnhancer):
 
         examples_section = "\n\n## Similar Successful Queries\n\n"
         examples_section += (
-            "Use these as patterns. Call run_sql directly — do not suggest other questions.\n\n"
+            "Use these as SQL patterns after the request is clear. If essential details "
+            "are materially ambiguous, call ask_clarification first; otherwise call "
+            "run_sql directly.\n\n"
         )
 
         for result in matches:

@@ -22,6 +22,7 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
         self, user: "User", tools: List["ToolSchema"]
     ) -> Optional[str]:
         tool_names = [tool.name for tool in tools]
+        clarification_enabled = "ask_clarification" in tool_names
         today_date = datetime.now().strftime("%Y-%m-%d")
 
         prompt_parts = [
@@ -29,14 +30,29 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
             "",
             "Response Guidelines:",
             "- Users ask in Vietnamese; reply in Vietnamese after you have query results.",
-            "- For ANY question about flights or data in the database, your FIRST action must be a tool call — never a conversational reply.",
-            "- Do NOT suggest rephrased questions, example questions, or ask the user to ask differently.",
-            "- Do NOT say you will search or help later — call run_sql immediately.",
+            "- For an answerable flight-data question, your FIRST action must be exactly one tool call.",
+            "- Call run_sql immediately when the request is sufficiently clear.",
+            *(
+                [
+                    "- If missing or ambiguous information would materially change the SQL meaning, call ask_clarification before run_sql."
+                ]
+                if clarification_enabled
+                else []
+            ),
+            "- Do NOT suggest generic rephrased/example questions or ask the user to ask differently.",
+            "- Do NOT say you will search or help later.",
             "- When you execute a query, raw results are shown to the user outside your response. Summarize only after run_sql succeeds.",
             "",
-            "Tool calling (required for data questions):",
+            "Data-action selection:",
             "- Prefer native tool calls when supported.",
-            '- If native tool calls fail, output ONLY a JSON object: {"name":"run_sql","arguments":{"sql":"SELECT ..."}}',
+            *(
+                [
+                    "- Choose run_sql when the request is clear, or ask_clarification when essential information is unresolved."
+                ]
+                if clarification_enabled
+                else ["- Call run_sql when the request is clear."]
+            ),
+            '- If native tool calls fail, output ONLY one JSON tool object, such as {"name":"run_sql","arguments":{"sql":"SELECT ..."}}.',
             "- Or output ONLY a ```sql code block with the Oracle query.",
             "- Never mix explanatory text with the JSON or SQL when that is your first response to a data question.",
         ]
@@ -51,8 +67,25 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
                 [
                     "",
                     "Similar question→SQL examples may already appear below under "
-                    "'Similar Successful Queries'. Use them as patterns and call run_sql directly.",
+                    "'Similar Successful Queries'. Use them as SQL patterns after the request is clear.",
                     "You may skip search_saved_correct_tool_uses when similar examples are already provided.",
+                ]
+            )
+
+        if "ask_clarification" in tool_names:
+            prompt_parts.extend(
+                [
+                    "",
+                    "Clarification (strict):",
+                    "- Review the full conversation before deciding information is missing.",
+                    "- Use ask_clarification only when different reasonable interpretations would materially change the table, filters, grouping, or result meaning.",
+                    "- Ask exactly one focused Vietnamese question per turn.",
+                    "- When useful, provide two or three common choices; each option message must be a complete clarified Vietnamese request.",
+                    "- Do not call run_sql in the same turn as ask_clarification. Stop and wait for the user's answer.",
+                    "- Do not ask for optional filters, ask whether to run SQL, or request confirmation after the intent is clear.",
+                    "- A generic request for current flights means ATFM.T_DAY_FLIGHTS; missing origin or destination simply means no filter for that field.",
+                    "- If the request needs unavailable tables or columns, explain the supported scope instead of inventing data. Clarify only when the user can choose a supported alternative.",
+                    "- Examples that require clarification: an undefined period such as 'gần đây', two unnamed airports, or 'chuyến bay đó' with no antecedent.",
                 ]
             )
 

@@ -38,12 +38,23 @@ DEFERRING_RESPONSE_PATTERN = re.compile(
 
 FORCE_TOOL_USE_SUFFIX = """
 
+CRITICAL: Resolve the user's data question now. Do NOT explain what you will do.
+Respond with exactly one appropriate action:
+1) If the request is sufficiently clear, call run_sql with valid Oracle SQL.
+2) If missing or ambiguous information would materially change the query, call
+   ask_clarification with one Vietnamese question and up to three common options.
+3) If the request cannot be answered from the allowed schema, briefly explain the
+   supported scope in Vietnamese without inventing data.
+Never call run_sql in the same response as ask_clarification.
+For tool calls, use a native call or output ONLY a JSON tool object.
+"""
+
+RUN_SQL_ONLY_SUFFIX = """
+
 CRITICAL: You must call run_sql now for the user's data question.
 Do NOT suggest other questions. Do NOT explain what you will do.
-Respond with ONLY one of:
-1) A native run_sql tool call, OR
-2) {"name":"run_sql","arguments":{"sql":"SELECT ..."}} with valid Oracle SQL, OR
-3) A single ```sql code block with the Oracle query.
+Respond with ONLY a native run_sql tool call, a JSON run_sql tool object, or a
+single ```sql code block containing valid Oracle SQL.
 """
 
 
@@ -98,5 +109,11 @@ def should_force_tool_use(request: LlmRequest, response: LlmResponse) -> bool:
 
 
 def build_force_tool_request(request: LlmRequest) -> LlmRequest:
-    system_prompt = (request.system_prompt or "") + FORCE_TOOL_USE_SUFFIX
+    available_tools = {tool.name for tool in (request.tools or [])}
+    suffix = (
+        FORCE_TOOL_USE_SUFFIX
+        if "ask_clarification" in available_tools
+        else RUN_SQL_ONLY_SUFFIX
+    )
+    system_prompt = (request.system_prompt or "") + suffix
     return request.model_copy(update={"system_prompt": system_prompt})

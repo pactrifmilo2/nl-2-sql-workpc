@@ -23,6 +23,16 @@ HITL_FEEDBACK_PROMPT = "Kết quả truy vấn có đúng không?"
 HITL_THUMBS_UP_LABEL = "👍 Đúng"
 HITL_THUMBS_DOWN_LABEL = "👎 Không đúng"
 
+# Clarification UI (clarification.py, llm_middleware.py)
+CLARIFICATION_CARD_TITLE = "Cần thêm thông tin"
+CLARIFICATION_TOOL_RESULT = (
+    "The clarification question and choices are visible to the user. "
+    "Do not call any other tool. Wait for the user's next message."
+)
+CLARIFICATION_WAIT_MESSAGE = (
+    "Vui lòng chọn một phương án ở trên hoặc nhập thông tin bổ sung."
+)
+
 HITL_SAVE_SUCCESS_ADMIN = (
     "Đã đưa mẫu câu hỏi → SQL vào hàng chờ huấn luyện. "
     "Hãy mở trang quản trị để kiểm tra và phê duyệt."

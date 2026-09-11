@@ -12,6 +12,7 @@ from vanna.core.llm import LlmRequest, LlmResponse, LlmService
 from vanna.core.middleware import LlmMiddleware
 from vanna.core.tool import ToolCall
 
+from .content.vi import CLARIFICATION_TOOL_RESULT, CLARIFICATION_WAIT_MESSAGE
 from .tool_use import build_force_tool_request, should_force_tool_use
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ FENCED_BLOCK_PATTERN = re.compile(r"```(?:json)?\s*\n(.*?)```", re.IGNORECASE | 
 
 
 class ForceToolUseMiddleware(LlmMiddleware):
-    """Retry once when a data question gets a conversational reply instead of run_sql."""
+    """Require a SQL or clarification action for flight-data questions."""
 
     def __init__(self, llm_service: LlmService):
         self.llm_service = llm_service
@@ -33,21 +34,79 @@ class ForceToolUseMiddleware(LlmMiddleware):
         response = await self.text_tool_call_middleware.after_llm_response(
             request, response
         )
+        response = _prefer_clarification(response)
+
+        if _follows_clarification_tool(request):
+            if response.is_tool_call():
+                logger.warning(
+                    "Blocked tool call(s) after ask_clarification while awaiting user input"
+                )
+            return LlmResponse(
+                content=CLARIFICATION_WAIT_MESSAGE,
+                finish_reason=response.finish_reason,
+                usage=response.usage,
+                metadata=response.metadata,
+            )
 
         if not should_force_tool_use(request, response):
             return response
 
-        logger.info("No tool call for data question; retrying with forced run_sql instruction")
+        logger.info(
+            "No action for data question; retrying with forced data-action instruction"
+        )
         retry_request = build_force_tool_request(request)
         retry_response = await self.llm_service.send_request(retry_request)
         retry_response = await self.text_tool_call_middleware.after_llm_response(
             retry_request, retry_response
         )
+        retry_response = _prefer_clarification(retry_response)
         if retry_response.is_tool_call():
-            logger.info("Force-tool retry produced tool call(s): %s", retry_response.tool_calls)
+            logger.info(
+                "Force-action retry produced tool call(s): %s",
+                retry_response.tool_calls,
+            )
         else:
-            logger.warning("Force-tool retry still returned no tool call")
+            logger.warning("Force-action retry still returned no tool call")
         return retry_response
+
+
+def _prefer_clarification(response: LlmResponse) -> LlmResponse:
+    """Never execute SQL alongside a clarification request."""
+
+    tool_calls = response.tool_calls or []
+    clarification_calls = [
+        call for call in tool_calls if call.name == "ask_clarification"
+    ]
+    if not clarification_calls:
+        return response
+
+    if len(tool_calls) > 1:
+        logger.warning(
+            "Discarded %d tool call(s) emitted alongside ask_clarification",
+            len(tool_calls) - 1,
+        )
+    return response.model_copy(
+        update={"content": None, "tool_calls": [clarification_calls[0]]}
+    )
+
+
+def _follows_clarification_tool(request: LlmRequest) -> bool:
+    """Return whether this LLM call immediately follows clarification UI output."""
+
+    if len(request.messages) < 2 or request.messages[-1].role != "tool":
+        return False
+
+    if request.messages[-1].content != CLARIFICATION_TOOL_RESULT:
+        return False
+
+    assistant_message = request.messages[-2]
+    if assistant_message.role != "assistant":
+        return False
+
+    return any(
+        call.name == "ask_clarification"
+        for call in (assistant_message.tool_calls or [])
+    )
 
 
 class TextToolCallMiddleware(LlmMiddleware):

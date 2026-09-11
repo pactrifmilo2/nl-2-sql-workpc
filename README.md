@@ -1,5 +1,9 @@
 # NL2SQL Vanna Oracle
 
+## User guide
+
+- [Hướng dẫn sử dụng Trợ lí AI (Tiếng Việt)](docs/HUONG_DAN_SU_DUNG_AI_CHAT.md)
+
 ## Admin reports and reviewed training
 
 Configure the admin session in `.env`:

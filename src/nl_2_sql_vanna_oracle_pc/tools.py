@@ -4,11 +4,14 @@ from vanna.tools.agent_memory import (
     SearchSavedCorrectToolUsesTool,
 )
 
+from .clarification import AskClarificationTool
+
 
 def create_tool_registry(db_tool: RunSqlTool) -> ToolRegistry:
     tools = ToolRegistry()
 
     tools.register_local_tool(db_tool, access_groups=["admin", "user"])
+    tools.register_local_tool(AskClarificationTool(), access_groups=["admin", "user"])
     tools.register_local_tool(SearchSavedCorrectToolUsesTool(), access_groups=["admin", "user"])
     tools.register_local_tool(VisualizeDataTool(), access_groups=["admin", "user"])
 
