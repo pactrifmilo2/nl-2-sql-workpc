@@ -132,6 +132,7 @@ class TrainingService:
             conversation_id=f"admin-training-{request_id}",
             request_id=request_id,
             agent_memory=self.memory,
+            metadata={"trusted_training_preview": True},
         )
 
     async def preview(self, *, candidate_id: str, sql: str, actor: str) -> dict[str, Any]:

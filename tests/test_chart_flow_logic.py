@@ -105,3 +105,18 @@ async def test_system_prompt_includes_clarification_rules_only_when_tool_present
     assert prompt_without_clarification is not None
     assert "Clarification (strict):" not in prompt_without_clarification
     assert "ask_clarification" not in prompt_without_clarification
+
+
+@pytest.mark.asyncio
+async def test_system_prompt_describes_interactive_limits_without_background_jobs() -> None:
+    builder = AtfmSystemPromptBuilder()
+
+    prompt = await builder.build_system_prompt(
+        user=_FakeUser(),
+        tools=[_FakeTool("run_sql"), _FakeTool("ask_clarification")],
+    )
+
+    assert prompt is not None
+    assert "Interactive query resource limits:" in prompt
+    assert "background jobs are not available" in prompt
+    assert "Before an unbounded historical detail query" in prompt

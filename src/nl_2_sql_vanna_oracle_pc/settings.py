@@ -89,6 +89,19 @@ class Settings:
     allowed_tables: set[str] = field(default_factory=lambda: parse_csv_env("ALLOWED_TABLES"))
     allowed_columns: set[str] = field(default_factory=default_allowed_columns)
 
+    query_max_rows: int = field(
+        default_factory=lambda: parse_int_env("QUERY_MAX_ROWS", 500)
+    )
+    query_preview_rows: int = field(
+        default_factory=lambda: parse_int_env("QUERY_PREVIEW_ROWS", 100)
+    )
+    query_timeout_seconds: int = field(
+        default_factory=lambda: parse_int_env("QUERY_TIMEOUT_SECONDS", 30)
+    )
+    query_max_sql_chars: int = field(
+        default_factory=lambda: parse_int_env("QUERY_MAX_SQL_CHARS", 20_000)
+    )
+
     speech_recognition_lang: str = getenv("SPEECH_RECOGNITION_LANG", "vi-VN")
 
     report_api_key: str = getenv("REPORT_API_KEY", "").strip()

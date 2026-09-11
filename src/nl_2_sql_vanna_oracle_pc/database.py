@@ -9,9 +9,59 @@ from vanna.core.tool import ToolContext, ToolResult
 from vanna.integrations.oracle import OracleRunner
 from vanna.tools import RunSqlTool
 
+from .content.vi import build_query_result_description
+from .query_policy import apply_runtime_row_limit, validate_runtime_sql
 from .settings import Settings
 
 logger = logging.getLogger(__name__)
+
+
+class BoundedOracleRunner(OracleRunner):
+    """Oracle runner with runtime validation, row limits, and a call timeout."""
+
+    def __init__(self, *, settings: Settings):
+        super().__init__(
+            user=settings.oracle_user,
+            password=settings.oracle_password,
+            dsn=settings.oracle_dsn,
+        )
+        self.settings = settings
+
+    async def run_sql(self, args: RunSqlToolArgs, context: ToolContext) -> pd.DataFrame:
+        allow_select_star = bool(
+            context.metadata.get("trusted_training_preview")
+        )
+        validated = validate_runtime_sql(
+            args.sql,
+            self.settings,
+            allow_select_star=allow_select_star,
+        )
+        bounded_sql = apply_runtime_row_limit(
+            validated.sql,
+            self.settings.query_max_rows,
+        )
+
+        conn = self.oracledb.connect(
+            user=self.user,
+            password=self.password,
+            dsn=self.dsn,
+            **self.kwargs,
+        )
+        conn.call_timeout = self.settings.query_timeout_seconds * 1000
+        cursor = conn.cursor()
+        cursor.arraysize = min(self.settings.query_max_rows, 1000)
+
+        try:
+            cursor.execute(bounded_sql)
+            results = cursor.fetchmany(size=self.settings.query_max_rows)
+            columns = [description[0] for description in cursor.description]
+            return pd.DataFrame(results, columns=columns)
+        except self.oracledb.Error:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
 
 
 class JsonSafeSqlRunner(SqlRunner):
@@ -36,6 +86,17 @@ class JsonSafeSqlRunner(SqlRunner):
 
 
 class FullResultRunSqlTool(RunSqlTool):
+    def __init__(
+        self,
+        *args,
+        preview_row_limit: int,
+        max_row_limit: int,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.preview_row_limit = min(preview_row_limit, max_row_limit)
+        self.max_row_limit = max_row_limit
+
     async def execute(self, context: ToolContext, args: RunSqlToolArgs) -> ToolResult:
         logger.debug("run_sql invoked by user=%s", context.user.id)
         context.metadata["hitl_tool_name"] = self.name
@@ -54,7 +115,26 @@ class FullResultRunSqlTool(RunSqlTool):
         )
 
         if isinstance(row_count, int) and hasattr(rich_component, "max_rows_displayed"):
-            rich_component.max_rows_displayed = row_count
+            rich_component.max_rows_displayed = min(
+                row_count,
+                self.preview_row_limit,
+            )
+            rich_component.title = "Kết quả truy vấn"
+            rich_component.description = build_query_result_description(
+                row_count=row_count,
+                column_count=len(result.metadata.get("columns", [])),
+                preview_rows=self.preview_row_limit,
+                max_rows=self.max_row_limit,
+            )
+
+            if row_count >= self.max_row_limit:
+                result.metadata["row_limit_reached"] = True
+                result.metadata["row_limit"] = self.max_row_limit
+                result.result_for_llm += (
+                    f"\n\nThe backend limited this result to {self.max_row_limit} rows. "
+                    "Tell the user the result may be incomplete and suggest narrowing "
+                    "the date range, airport, or flight number."
+                )
 
         if result.success:
             logger.debug("run_sql succeeded: rows=%s user=%s", row_count, context.user.id)
@@ -69,12 +149,10 @@ class FullResultRunSqlTool(RunSqlTool):
 
 
 def create_db_tool(settings: Settings) -> RunSqlTool:
-    oracle_runner = OracleRunner(
-        user=settings.oracle_user,
-        password=settings.oracle_password,
-        dsn=settings.oracle_dsn,
-    )
+    oracle_runner = BoundedOracleRunner(settings=settings)
 
     return FullResultRunSqlTool(
-        sql_runner=JsonSafeSqlRunner(oracle_runner)
+        sql_runner=JsonSafeSqlRunner(oracle_runner),
+        preview_row_limit=settings.query_preview_rows,
+        max_row_limit=settings.query_max_rows,
     )

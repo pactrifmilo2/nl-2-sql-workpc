@@ -30,8 +30,26 @@ CLARIFICATION_TOOL_RESULT = (
     "Do not call any other tool. Wait for the user's next message."
 )
 CLARIFICATION_WAIT_MESSAGE = (
-    "Vui lòng chọn một phương án ở trên hoặc nhập thông tin bổ sung."
+    "Vui lòng trả lời câu hỏi ở trên để tôi tiếp tục."
 )
+
+
+def build_query_result_description(
+    *,
+    row_count: int,
+    column_count: int,
+    preview_rows: int,
+    max_rows: int,
+) -> str:
+    description = f"Truy vấn trả về {row_count} dòng và {column_count} cột."
+    if row_count > preview_rows:
+        description += f" Giao diện hiển thị tối đa {preview_rows} dòng."
+    if row_count >= max_rows:
+        description += (
+            f" Kết quả đã đạt giới hạn {max_rows} dòng và có thể còn dữ liệu; "
+            "hãy thêm khoảng thời gian, sân bay hoặc số hiệu chuyến bay để thu hẹp."
+        )
+    return description
 
 HITL_SAVE_SUCCESS_ADMIN = (
     "Đã đưa mẫu câu hỏi → SQL vào hàng chờ huấn luyện. "

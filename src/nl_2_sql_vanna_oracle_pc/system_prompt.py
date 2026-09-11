@@ -89,6 +89,28 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
                 ]
             )
 
+        if "run_sql" in tool_names:
+            scope_instruction = (
+                "- Before an unbounded historical detail query, use "
+                "ask_clarification to offer a narrower date range, airport, flight "
+                "number, or a summary instead."
+                if clarification_enabled
+                else "- Before an unbounded historical detail query, ask one concise "
+                "question to narrow the date range, airport, flight number, or summary."
+            )
+            prompt_parts.extend(
+                [
+                    "",
+                    "Interactive query resource limits:",
+                    f"- The backend returns at most {self.settings.query_max_rows} rows and shows at most {self.settings.query_preview_rows} rows in the chat preview.",
+                    f"- Queries have a {self.settings.query_timeout_seconds}-second database call timeout.",
+                    "- Do not promise background execution; background jobs are not available.",
+                    scope_instruction,
+                    "- Aggregate queries may run directly when their intent is clear, but still use only necessary columns and filters.",
+                    "- If the result reaches the backend row limit, clearly tell the user it may be incomplete and suggest narrowing the request.",
+                ]
+            )
+
         if "save_question_tool_args" in tool_names:
             if self.settings.hitl_enabled:
                 prompt_parts.append(
