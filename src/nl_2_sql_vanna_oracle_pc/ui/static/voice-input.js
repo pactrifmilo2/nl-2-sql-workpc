@@ -10,6 +10,13 @@
   const SpeechRecognition =
     window.SpeechRecognition || window.webkitSpeechRecognition;
 
+  const permissionBlockedMessage =
+    "Micro đang bị chặn. Hãy mở quyền của trang (biểu tượng bên trái thanh địa chỉ), " +
+    "đặt Microphone thành Cho phép, rồi tải lại trang. Nếu vẫn bị chặn, hãy bật quyền micro cho trình duyệt trong Cài đặt Windows.";
+
+  const insecureContextMessage =
+    "Micro chỉ hoạt động trên HTTPS hoặc localhost. Hãy mở liên kết HTTPS (ví dụ liên kết ngrok), không dùng địa chỉ HTTP của máy trong mạng.";
+
   function getVannaChat() {
     return document.querySelector("vanna-chat");
   }
@@ -112,6 +119,65 @@
     input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
   }
 
+  function microphoneErrorMessage(error) {
+    const name = error?.name || "";
+    const code = error?.code || "";
+
+    if (code === "insecure-context") return insecureContextMessage;
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      return permissionBlockedMessage;
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      return "Không tìm thấy micro. Hãy kết nối micro và kiểm tra thiết bị đầu vào của Windows.";
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      return "Không thể mở micro. Có thể micro đang được ứng dụng khác sử dụng.";
+    }
+    return "Không thể mở micro. Hãy kiểm tra quyền micro của trình duyệt và thử lại.";
+  }
+
+  async function requestMicrophoneAccess() {
+    if (!window.isSecureContext) {
+      const error = new Error("Microphone requires a secure context");
+      error.code = "insecure-context";
+      throw error;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      return;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((track) => track.stop());
+  }
+
+  async function watchMicrophonePermission(vannaChat, button) {
+    if (!window.isSecureContext) {
+      setHint(vannaChat, insecureContextMessage);
+      button.title = insecureContextMessage;
+      return;
+    }
+
+    if (!navigator.permissions?.query) return;
+
+    try {
+      const permission = await navigator.permissions.query({ name: "microphone" });
+      const renderPermission = () => {
+        if (permission.state === "denied") {
+          setHint(vannaChat, permissionBlockedMessage);
+          button.title = permissionBlockedMessage;
+        } else if (!button.classList.contains("is-listening")) {
+          setHint(vannaChat, "");
+          button.title = "Nhập bằng giọng nói";
+        }
+      };
+      renderPermission();
+      permission.addEventListener?.("change", renderPermission);
+    } catch (_error) {
+      // Some browsers expose the Permissions API but not the microphone query.
+    }
+  }
+
   function createController(vannaChat, button) {
     const recognition = new SpeechRecognition();
     recognition.lang = lang;
@@ -119,7 +185,10 @@
     recognition.interimResults = true;
 
     let listening = false;
+    let starting = false;
+    let microphoneAccessGranted = false;
     let baseText = "";
+    let messageAfterEnd = "";
 
     recognition.onstart = () => {
       listening = true;
@@ -161,7 +230,7 @@
 
     recognition.onerror = (event) => {
       const messages = {
-        "not-allowed": "Quyền micro bị từ chối. Hãy cho phép micro trong trình duyệt.",
+        "not-allowed": permissionBlockedMessage,
         "service-not-allowed": "Nhận dạng giọng nói không khả dụng trên trang này.",
         "no-speech": "Không nghe thấy giọng nói. Hãy thử lại.",
         "audio-capture": "Không tìm thấy micro.",
@@ -169,37 +238,52 @@
         aborted: "",
       };
       const message = messages[event.error] || `Lỗi nhận dạng giọng nói: ${event.error}`;
-      if (message) {
-        setHint(vannaChat, message);
+      if (event.error === "not-allowed") {
+        microphoneAccessGranted = false;
       }
+      messageAfterEnd = message;
+      if (message) setHint(vannaChat, message);
       stop();
     };
 
     recognition.onend = () => {
       stop();
-      setHint(vannaChat, "");
+      setHint(vannaChat, messageAfterEnd);
     };
 
     function stop() {
-      if (!listening) return;
       listening = false;
       button.classList.remove("is-listening");
       button.innerHTML = micIcon(false);
       button.setAttribute("aria-pressed", "false");
     }
 
-    function start() {
+    async function start() {
       if (listening) {
         recognition.stop();
         return;
       }
+      if (starting) return;
 
+      starting = true;
+      button.disabled = true;
+      messageAfterEnd = "";
       try {
+        if (!microphoneAccessGranted) {
+          setHint(vannaChat, "Đang kiểm tra quyền micro...");
+          await requestMicrophoneAccess();
+          microphoneAccessGranted = true;
+        }
         recognition.start();
       } catch (error) {
-        if (error.name !== "InvalidStateError") {
-          setHint(vannaChat, "Không thể bắt đầu ghi âm. Hãy thử lại.");
+        if (error?.name !== "InvalidStateError") {
+          messageAfterEnd = microphoneErrorMessage(error);
+          setHint(vannaChat, messageAfterEnd);
+          button.title = messageAfterEnd;
         }
+      } finally {
+        starting = false;
+        button.disabled = false;
       }
     }
 
@@ -237,6 +321,7 @@
 
     const controller = createController(vannaChat, button);
     button.addEventListener("click", () => controller.start());
+    watchMicrophonePermission(vannaChat, button);
 
     return true;
   }
