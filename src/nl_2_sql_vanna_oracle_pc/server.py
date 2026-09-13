@@ -137,6 +137,15 @@ def _replace_index_route(app: FastAPI, html: str) -> None:
         return html
 
 
+def _register_lifecycle_handler(
+    app: FastAPI,
+    event_type: str,
+    handler: Any,
+) -> None:
+    """Register lifecycle callbacks across supported FastAPI versions."""
+    app.router.add_event_handler(event_type, handler)
+
+
 class VannaFastAPIServerWithVoice(VannaFastAPIServer):
     """Vanna FastAPI server with browser speech recognition on the chat input."""
 
@@ -195,8 +204,12 @@ class VannaFastAPIServerWithVoice(VannaFastAPIServer):
                     store=self.query_job_store,
                 )
             )
-            app.add_event_handler("startup", self.query_job_service.start)
-            app.add_event_handler("shutdown", self.query_job_service.stop)
+            _register_lifecycle_handler(
+                app, "startup", self.query_job_service.start
+            )
+            _register_lifecycle_handler(
+                app, "shutdown", self.query_job_service.stop
+            )
 
         @app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
         async def admin_page() -> str:

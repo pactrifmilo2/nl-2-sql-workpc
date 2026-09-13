@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from nl_2_sql_vanna_oracle_pc.server import (
     QueryJobCORSMiddleware,
     ReportsCORSMiddleware,
+    _register_lifecycle_handler,
 )
 
 
@@ -63,3 +64,21 @@ def test_query_job_cors_is_limited_to_integration_routes() -> None:
         "Origin"
     ]
     assert "access-control-allow-origin" not in admin_response.headers
+
+
+def test_lifecycle_handlers_are_registered_on_fastapi_router() -> None:
+    app = FastAPI()
+    events: list[str] = []
+
+    async def startup() -> None:
+        events.append("startup")
+
+    async def shutdown() -> None:
+        events.append("shutdown")
+
+    _register_lifecycle_handler(app, "startup", startup)
+    _register_lifecycle_handler(app, "shutdown", shutdown)
+
+    with TestClient(app):
+        assert events == ["startup"]
+    assert events == ["startup", "shutdown"]
