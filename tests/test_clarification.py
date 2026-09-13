@@ -199,6 +199,8 @@ def test_single_flight_in_previous_turn_resolves_reference() -> None:
         ("Cho tôi các chuyến bay trễ", "delay_metric"),
         ("Thống kê chuyến bay theo sân bay", "airport_role"),
         ("Vẽ biểu đồ số chuyến bay", "grouping"),
+        ("Xem danh sách tất cả các chuyến bay", "query_scope"),
+        ("Liệt kê toàn bộ chuyến bay", "query_scope"),
     ],
 )
 def test_common_ambiguities_have_deterministic_policies(
@@ -217,6 +219,8 @@ def test_common_ambiguities_have_deterministic_policies(
     "question",
     [
         "Cho tôi danh sách chuyến bay từ VVNB hôm nay",
+        "Cho tôi danh sách tất cả chuyến bay hôm nay",
+        "Có bao nhiêu chuyến bay trong toàn bộ dữ liệu?",
         "Thống kê chuyến bay trong 7 ngày gần đây",
         "Vẽ biểu đồ số chuyến bay theo sân bay đi",
         "Cho tôi các chuyến bay trễ cất cánh",
@@ -227,6 +231,38 @@ def test_common_ambiguities_have_deterministic_policies(
 def test_clear_questions_are_not_forced_to_clarify(question: str) -> None:
     requirement = find_required_clarification(
         [LlmMessage(role="user", content=question)]
+    )
+
+    assert requirement is None
+
+
+def test_unbounded_listing_offers_background_when_available() -> None:
+    requirement = find_required_clarification(
+        [LlmMessage(role="user", content="Xem danh sách tất cả các chuyến bay")],
+        background_enabled=True,
+    )
+
+    assert requirement is not None
+    assert [option.label for option in requirement.options] == [
+        "Hôm nay",
+        "7 ngày gần nhất",
+        "Chạy nền",
+    ]
+    assert "Chạy nền và thông báo" in requirement.options[-1].message
+
+
+def test_explicit_background_choice_does_not_repeat_scope_clarification() -> None:
+    requirement = find_required_clarification(
+        [
+            LlmMessage(
+                role="user",
+                content=(
+                    "Chạy nền và thông báo khi hoàn thành: "
+                    "Xem danh sách tất cả các chuyến bay"
+                ),
+            )
+        ],
+        background_enabled=True,
     )
 
     assert requirement is None
@@ -325,3 +361,23 @@ def test_force_retry_remains_compatible_without_clarification_tool() -> None:
     assert retry_request.system_prompt is not None
     assert "You must call run_sql now" in retry_request.system_prompt
     assert "ask_clarification" not in retry_request.system_prompt
+
+
+def test_force_retry_allows_explicit_background_tool() -> None:
+    request = _request(
+        [
+            LlmMessage(
+                role="user",
+                content="Chạy nền danh sách chuyến bay và thông báo khi hoàn thành",
+            )
+        ],
+        "run_sql",
+        "ask_clarification",
+        "queue_background_sql",
+    )
+
+    retry_request = build_force_tool_request(request)
+
+    assert retry_request.system_prompt is not None
+    assert "call\n   queue_background_sql" in retry_request.system_prompt
+    assert "Never combine run_sql" in retry_request.system_prompt

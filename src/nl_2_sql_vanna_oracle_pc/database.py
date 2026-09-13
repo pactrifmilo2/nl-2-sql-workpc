@@ -19,13 +19,21 @@ logger = logging.getLogger(__name__)
 class BoundedOracleRunner(OracleRunner):
     """Oracle runner with runtime validation, row limits, and a call timeout."""
 
-    def __init__(self, *, settings: Settings):
+    def __init__(
+        self,
+        *,
+        settings: Settings,
+        max_rows: int | None = None,
+        timeout_seconds: int | None = None,
+    ):
         super().__init__(
             user=settings.oracle_user,
             password=settings.oracle_password,
             dsn=settings.oracle_dsn,
         )
         self.settings = settings
+        self.max_rows = max_rows or settings.query_max_rows
+        self.timeout_seconds = timeout_seconds or settings.query_timeout_seconds
 
     async def run_sql(self, args: RunSqlToolArgs, context: ToolContext) -> pd.DataFrame:
         allow_select_star = bool(
@@ -38,7 +46,7 @@ class BoundedOracleRunner(OracleRunner):
         )
         bounded_sql = apply_runtime_row_limit(
             validated.sql,
-            self.settings.query_max_rows,
+            self.max_rows,
         )
 
         conn = self.oracledb.connect(
@@ -47,13 +55,13 @@ class BoundedOracleRunner(OracleRunner):
             dsn=self.dsn,
             **self.kwargs,
         )
-        conn.call_timeout = self.settings.query_timeout_seconds * 1000
+        conn.call_timeout = self.timeout_seconds * 1000
         cursor = conn.cursor()
-        cursor.arraysize = min(self.settings.query_max_rows, 1000)
+        cursor.arraysize = min(self.max_rows, 1000)
 
         try:
             cursor.execute(bounded_sql)
-            results = cursor.fetchmany(size=self.settings.query_max_rows)
+            results = cursor.fetchmany(size=self.max_rows)
             columns = [description[0] for description in cursor.description]
             return pd.DataFrame(results, columns=columns)
         except self.oracledb.Error:
@@ -155,4 +163,16 @@ def create_db_tool(settings: Settings) -> RunSqlTool:
         sql_runner=JsonSafeSqlRunner(oracle_runner),
         preview_row_limit=settings.query_preview_rows,
         max_row_limit=settings.query_max_rows,
+    )
+
+
+def create_background_sql_runner(settings: Settings) -> SqlRunner:
+    """Create a safe runner with the larger, explicit background-job budget."""
+
+    return JsonSafeSqlRunner(
+        BoundedOracleRunner(
+            settings=settings,
+            max_rows=settings.query_job_max_rows,
+            timeout_seconds=settings.query_job_timeout_seconds,
+        )
     )

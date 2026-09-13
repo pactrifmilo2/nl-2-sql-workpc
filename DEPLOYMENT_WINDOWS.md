@@ -321,6 +321,15 @@ APP_BASIC_AUTH_PASSWORD=replace-with-strong-secret
 # Report API
 REPORT_API_KEY=replace-with-separate-strong-secret
 
+# Background query jobs and external admin notification API
+QUERY_JOBS_ENABLED=true
+QUERY_JOB_DB_FILE=./data/query_jobs.sqlite3
+QUERY_JOB_RESULT_DIRECTORY=./data/query-results
+QUERY_JOB_MAX_ROWS=10000
+QUERY_JOB_TIMEOUT_SECONDS=300
+QUERY_JOB_RESULT_TTL_HOURS=24
+QUERY_JOB_API_KEY=replace-with-another-strong-secret
+
 # Log
 LOG_LEVEL=INFO
 LOG_FILE=./logs/app.log
@@ -338,6 +347,8 @@ Yêu cầu bảo mật:
 - Không gửi `.env` qua email hoặc commit vào Git.
 - Chỉ tài khoản service và Administrators được đọc `.env`.
 - Không dùng chung `APP_BASIC_AUTH_PASSWORD` và `REPORT_API_KEY`.
+- Không dùng chung `QUERY_JOB_API_KEY` với các mật khẩu hoặc API key khác; ưu tiên
+  gọi API từ backend của trang quản trị bên ngoài.
 - Nếu public ra Internet, đặt ứng dụng sau HTTPS reverse proxy; không expose trực
   tiếp HTTP cổng 8000.
 

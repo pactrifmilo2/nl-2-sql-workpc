@@ -40,6 +40,8 @@ Airport codes are stored as short codes (e.g. VVNB, VVTH, DAD). Match them exact
 Time columns (ETD, ETA, ATD, ATA) are datetime values. Filter a calendar day with:
   column >= DATE 'YYYY-MM-DD' AND column < DATE 'YYYY-MM-DD' + 1
 or TRUNC(column) = DATE 'YYYY-MM-DD'.
+FLIGHTDATE may also include a time component. Never use FLIGHTDATE = SYSDATE for today;
+use FLIGHTDATE >= TRUNC(SYSDATE) AND FLIGHTDATE < TRUNC(SYSDATE) + 1.
 
 Vietnamese term hints (for understanding questions only — still use English column names in SQL):
 - chuyến bay = flight

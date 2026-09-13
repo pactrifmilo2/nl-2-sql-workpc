@@ -49,6 +49,21 @@ Never call run_sql in the same response as ask_clarification.
 For tool calls, use a native call or output ONLY a JSON tool object.
 """
 
+BACKGROUND_FORCE_TOOL_USE_SUFFIX = """
+
+CRITICAL: Resolve the user's data question now. Do NOT explain what you will do.
+Respond with exactly one appropriate action:
+1) If the request is sufficiently clear and interactive, call run_sql.
+2) If missing or ambiguous information would materially change the query, call
+   ask_clarification with one Vietnamese question and up to three common options.
+3) If the user explicitly requested background execution, call
+   queue_background_sql with the complete Vietnamese question and valid Oracle SQL.
+4) If the request cannot be answered from the allowed schema, briefly explain the
+   supported scope in Vietnamese without inventing data.
+Never combine run_sql, ask_clarification, or queue_background_sql in one response.
+For tool calls, use a native call or output ONLY a JSON tool object.
+"""
+
 RUN_SQL_ONLY_SUFFIX = """
 
 CRITICAL: You must call run_sql now for the user's data question.
@@ -110,10 +125,13 @@ def should_force_tool_use(request: LlmRequest, response: LlmResponse) -> bool:
 
 def build_force_tool_request(request: LlmRequest) -> LlmRequest:
     available_tools = {tool.name for tool in (request.tools or [])}
-    suffix = (
-        FORCE_TOOL_USE_SUFFIX
-        if "ask_clarification" in available_tools
-        else RUN_SQL_ONLY_SUFFIX
-    )
+    if "ask_clarification" in available_tools:
+        suffix = (
+            BACKGROUND_FORCE_TOOL_USE_SUFFIX
+            if "queue_background_sql" in available_tools
+            else FORCE_TOOL_USE_SUFFIX
+        )
+    else:
+        suffix = RUN_SQL_ONLY_SUFFIX
     system_prompt = (request.system_prompt or "") + suffix
     return request.model_copy(update={"system_prompt": system_prompt})

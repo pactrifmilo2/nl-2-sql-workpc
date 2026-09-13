@@ -102,6 +102,32 @@ class Settings:
         default_factory=lambda: parse_int_env("QUERY_MAX_SQL_CHARS", 20_000)
     )
 
+    query_jobs_enabled: bool = field(
+        default_factory=lambda: parse_bool_env("QUERY_JOBS_ENABLED", default=False)
+    )
+    query_job_db_file: str = getenv(
+        "QUERY_JOB_DB_FILE", "data/query_jobs.sqlite3"
+    ).strip()
+    query_job_result_directory: str = getenv(
+        "QUERY_JOB_RESULT_DIRECTORY", "data/query-results"
+    ).strip()
+    query_job_max_rows: int = field(
+        default_factory=lambda: parse_int_env("QUERY_JOB_MAX_ROWS", 10_000)
+    )
+    query_job_timeout_seconds: int = field(
+        default_factory=lambda: parse_int_env("QUERY_JOB_TIMEOUT_SECONDS", 300)
+    )
+    query_job_result_ttl_hours: int = field(
+        default_factory=lambda: parse_int_env("QUERY_JOB_RESULT_TTL_HOURS", 24)
+    )
+    query_job_poll_seconds: int = field(
+        default_factory=lambda: parse_int_env("QUERY_JOB_POLL_SECONDS", 2)
+    )
+    query_job_api_key: str = getenv("QUERY_JOB_API_KEY", "").strip()
+    query_job_api_cors_origins: tuple[str, ...] = field(
+        default_factory=lambda: parse_csv_values("QUERY_JOB_API_CORS_ORIGINS")
+    )
+
     speech_recognition_lang: str = getenv("SPEECH_RECOGNITION_LANG", "vi-VN")
 
     report_api_key: str = getenv("REPORT_API_KEY", "").strip()

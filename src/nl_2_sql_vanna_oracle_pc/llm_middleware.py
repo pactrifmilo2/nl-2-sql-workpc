@@ -106,7 +106,10 @@ def _enforce_required_clarification(
     if "ask_clarification" not in available_tools:
         return response
 
-    requirement = find_required_clarification(request.messages)
+    requirement = find_required_clarification(
+        request.messages,
+        background_enabled="queue_background_sql" in available_tools,
+    )
     if requirement is None:
         return response
 

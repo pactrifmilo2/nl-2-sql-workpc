@@ -120,3 +120,22 @@ async def test_system_prompt_describes_interactive_limits_without_background_job
     assert "Interactive query resource limits:" in prompt
     assert "background jobs are not available" in prompt
     assert "Before an unbounded historical detail query" in prompt
+
+
+@pytest.mark.asyncio
+async def test_system_prompt_requires_consent_for_background_jobs() -> None:
+    builder = AtfmSystemPromptBuilder()
+
+    prompt = await builder.build_system_prompt(
+        user=_FakeUser(),
+        tools=[
+            _FakeTool("run_sql"),
+            _FakeTool("ask_clarification"),
+            _FakeTool("queue_background_sql"),
+        ],
+    )
+
+    assert prompt is not None
+    assert "Background execution is available" in prompt
+    assert "only after the user explicitly asks" in prompt
+    assert "background jobs are not available" not in prompt

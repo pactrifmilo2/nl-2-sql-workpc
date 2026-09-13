@@ -11,13 +11,28 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 class BasicAuthMiddleware:
-    def __init__(self, app: ASGIApp, username: str, password: str):
+    def __init__(
+        self,
+        app: ASGIApp,
+        username: str,
+        password: str,
+        exempt_path_prefixes: tuple[str, ...] = (),
+    ):
         self.app = app
         self.username = username
         self.password = password
+        self.exempt_path_prefixes = exempt_path_prefixes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] not in {"http", "websocket"} or self._authorized(scope):
+        path = scope.get("path", "")
+        is_exempt = scope["type"] == "http" and any(
+            path.startswith(prefix) for prefix in self.exempt_path_prefixes
+        )
+        if (
+            scope["type"] not in {"http", "websocket"}
+            or is_exempt
+            or self._authorized(scope)
+        ):
             await self.app(scope, receive, send)
             return
 

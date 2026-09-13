@@ -97,3 +97,11 @@ def log_startup_summary(settings: Settings) -> None:
         logger.warning("Admin reports/training disabled: configure ADMIN_* settings")
     if settings.ollama_basic_auth_enabled:
         logger.info("Ollama basic auth enabled")
+    if settings.query_jobs_enabled:
+        logger.info(
+            "Background query jobs enabled: db=%s result_dir=%s max_rows=%s timeout_seconds=%s",
+            settings.query_job_db_file,
+            settings.query_job_result_directory,
+            settings.query_job_max_rows,
+            settings.query_job_timeout_seconds,
+        )

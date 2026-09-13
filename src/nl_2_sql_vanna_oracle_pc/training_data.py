@@ -30,7 +30,8 @@ TRAINING_EXAMPLES = [
             "sql": """
             SELECT FLIGHTNBR, FLIGHTDATE, FROM_AIRP, TO_AIRP, ETD, ETA, VIA, ATD, ATA
             FROM ATFM.T_DAY_FLIGHTS
-            WHERE FLIGHTDATE = '2025-01-01'
+            WHERE FLIGHTDATE >= DATE '2025-01-01'
+              AND FLIGHTDATE < DATE '2025-01-02'
             """
         },
     ),
@@ -43,7 +44,8 @@ TRAINING_EXAMPLES = [
         FROM ATFM.T_DAY_FLIGHTS
         WHERE FROM_AIRP = 'VHHH'
           AND TO_AIRP = 'WMKK'
-          AND FLIGHTDATE = DATE '2025-01-01'
+          AND FLIGHTDATE >= DATE '2025-01-01'
+          AND FLIGHTDATE < DATE '2025-01-02'
         """
     },
 ),

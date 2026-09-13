@@ -23,6 +23,9 @@ from .content.vi import (
     PAGE_TITLE,
 )
 from .reports import create_reports_router
+from .query_job_api import create_query_job_router
+from .query_job_service import QueryJobService
+from .query_job_store import QueryJobStore
 from .settings import settings
 from .training_service import TrainingService
 from .training_store import TrainingStore
@@ -42,6 +45,21 @@ class ReportsCORSMiddleware(CORSMiddleware):
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or not scope.get("path", "").startswith(
             "/api/reports/"
+        ):
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
+
+
+class QueryJobCORSMiddleware(CORSMiddleware):
+    """Apply cross-origin access only to the external job/notification API."""
+
+    def __init__(self, app: ASGIApp, **kwargs: Any):
+        super().__init__(app, **kwargs)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or not scope.get("path", "").startswith(
+            "/api/integration/"
         ):
             await self.app(scope, receive, send)
             return
@@ -130,11 +148,15 @@ class VannaFastAPIServerWithVoice(VannaFastAPIServer):
         admin_auth: AdminAuth,
         training_store: TrainingStore,
         training_service: TrainingService,
+        query_job_store: QueryJobStore | None = None,
+        query_job_service: QueryJobService | None = None,
     ) -> None:
         super().__init__(agent, config)
         self.admin_auth = admin_auth
         self.training_store = training_store
         self.training_service = training_service
+        self.query_job_store = query_job_store
+        self.query_job_service = query_job_service
 
     def create_app(self) -> FastAPI:
         app = super().create_app()
@@ -166,6 +188,15 @@ class VannaFastAPIServerWithVoice(VannaFastAPIServer):
                 service=self.training_service,
             )
         )
+        if self.query_job_store is not None and self.query_job_service is not None:
+            app.include_router(
+                create_query_job_router(
+                    settings=settings,
+                    store=self.query_job_store,
+                )
+            )
+            app.add_event_handler("startup", self.query_job_service.start)
+            app.add_event_handler("shutdown", self.query_job_service.stop)
 
         @app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
         async def admin_page() -> str:
@@ -176,6 +207,11 @@ class VannaFastAPIServerWithVoice(VannaFastAPIServer):
                 BasicAuthMiddleware,
                 username=settings.app_basic_auth_user,
                 password=settings.app_basic_auth_password,
+                exempt_path_prefixes=(
+                    ("/api/integration/",)
+                    if self.query_job_store is not None
+                    else ()
+                ),
             )
 
         if settings.report_api_cors_origins:
@@ -187,6 +223,19 @@ class VannaFastAPIServerWithVoice(VannaFastAPIServer):
                 allow_headers=[
                     "Accept",
                     "Authorization",
+                    "Content-Type",
+                    "X-API-Key",
+                ],
+            )
+
+        if settings.query_job_api_cors_origins:
+            app.add_middleware(
+                QueryJobCORSMiddleware,
+                allow_origins=list(settings.query_job_api_cors_origins),
+                allow_credentials=False,
+                allow_methods=["GET", "POST"],
+                allow_headers=[
+                    "Accept",
                     "Content-Type",
                     "X-API-Key",
                 ],

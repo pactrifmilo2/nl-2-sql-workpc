@@ -7,7 +7,7 @@ from .admin_auth import AdminAuth, create_admin_auth
 from .audit import create_agent_config, create_audit_logger
 from .auth import create_user_resolver
 from .logging_config import log_startup_summary
-from .database import create_db_tool
+from .database import create_background_sql_runner, create_db_tool
 from .hitl import (
     create_agent_class,
     create_feedback_logger,
@@ -21,6 +21,8 @@ from .llm_context import (
 from .llm import create_llm_service
 from .llm_middleware import ForceToolUseMiddleware
 from .memory import ResilientChromaAgentMemory, create_agent_memory
+from .query_job_service import QueryJobService
+from .query_job_store import QueryJobStore
 from .reports import create_ai_report_logger
 from .settings import settings
 from .system_prompt import AtfmSystemPromptBuilder
@@ -36,6 +38,7 @@ def create_agent(
     agent_memory: ResilientChromaAgentMemory | None = None,
     admin_auth: AdminAuth | None = None,
     training_store: TrainingStore | None = None,
+    query_job_service: QueryJobService | None = None,
 ):
     log_startup_summary(settings)
     llm = create_llm_service(settings)
@@ -43,7 +46,7 @@ def create_agent(
     agent_memory = agent_memory or create_agent_memory(settings)
     admin_auth = admin_auth or create_admin_auth(settings, training_store)
     user_resolver = create_user_resolver(admin_auth)
-    tools = create_tool_registry(db_tool)
+    tools = create_tool_registry(db_tool, query_job_service)
     conversation_store = MemoryConversationStore()
     feedback_logger = create_feedback_logger(settings, training_store)
     ai_report_logger = create_ai_report_logger(settings, training_store)
@@ -87,12 +90,22 @@ def create_server() -> VannaFastAPIServerWithVoice:
         raise RuntimeError("TRAINING_DB_FILE must be configured")
     admin_auth = create_admin_auth(settings, training_store)
     db_tool = create_db_tool(settings)
+    query_job_store = None
+    query_job_service = None
+    if settings.query_jobs_enabled:
+        query_job_store = QueryJobStore(settings.query_job_db_file)
+        query_job_service = QueryJobService(
+            settings=settings,
+            store=query_job_store,
+            sql_runner=create_background_sql_runner(settings),
+        )
     agent_memory = create_agent_memory(settings)
     agent = create_agent(
         db_tool=db_tool,
         agent_memory=agent_memory,
         admin_auth=admin_auth,
         training_store=training_store,
+        query_job_service=query_job_service,
     )
     training_service = TrainingService(
         settings=settings,
@@ -105,4 +118,6 @@ def create_server() -> VannaFastAPIServerWithVoice:
         admin_auth=admin_auth,
         training_store=training_store,
         training_service=training_service,
+        query_job_store=query_job_store,
+        query_job_service=query_job_service,
     )

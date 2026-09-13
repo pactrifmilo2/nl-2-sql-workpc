@@ -64,3 +64,39 @@ exact origins to `REPORT_API_CORS_ORIGINS`.
 `AI_REPORT_INCLUDE_RESPONSE_TEXT=false` prevents final answers from being retained. Questions and
 generated SQL remain in the report because they are the core diagnostic fields. Do not put a
 long-lived API key in public browser JavaScript; use a backend or reverse proxy for public pages.
+
+## Background queries and notification API
+
+Background jobs are disabled by default. Enable them in `.env` and configure a dedicated API key:
+
+```dotenv
+QUERY_JOBS_ENABLED=true
+QUERY_JOB_DB_FILE=data/query_jobs.sqlite3
+QUERY_JOB_RESULT_DIRECTORY=data/query-results
+QUERY_JOB_MAX_ROWS=10000
+QUERY_JOB_TIMEOUT_SECONDS=300
+QUERY_JOB_RESULT_TTL_HOURS=24
+QUERY_JOB_API_KEY=use-a-strong-random-secret
+```
+
+When enabled, a broad detail request can offer a `Chạy nền` option. The application validates the
+generated Oracle `SELECT`, stores a durable job in SQLite, executes it on one background worker,
+and creates a notification when it succeeds, fails, or is cancelled. Interrupted jobs are queued
+again when the Windows service restarts. Result JSON files expire after the configured TTL.
+
+The external admin backend can poll these endpoints:
+
+```http
+GET  /api/integration/query-jobs?status=running&limit=50
+GET  /api/integration/query-jobs/{job_id}
+GET  /api/integration/query-jobs/{job_id}/result
+POST /api/integration/query-jobs/{job_id}/cancel
+GET  /api/integration/notifications?unread=true&after_id=0
+POST /api/integration/notifications/{notification_id}/read
+X-API-Key: your-query-job-api-key
+```
+
+Use `after_id` when polling notifications so the client receives only newer records. Prefer calls
+from the other admin page's backend; never embed `QUERY_JOB_API_KEY` in public browser JavaScript.
+If direct browser access is unavoidable, configure only exact trusted origins in
+`QUERY_JOB_API_CORS_ORIGINS`.

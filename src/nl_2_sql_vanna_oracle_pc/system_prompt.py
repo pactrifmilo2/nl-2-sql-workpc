@@ -23,6 +23,7 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
     ) -> Optional[str]:
         tool_names = [tool.name for tool in tools]
         clarification_enabled = "ask_clarification" in tool_names
+        background_enabled = "queue_background_sql" in tool_names
         today_date = datetime.now().strftime("%Y-%m-%d")
 
         prompt_parts = [
@@ -31,7 +32,11 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
             "Response Guidelines:",
             "- Users ask in Vietnamese; reply in Vietnamese after you have query results.",
             "- For an answerable flight-data question, your FIRST action must be exactly one tool call.",
-            "- Call run_sql immediately when the request is sufficiently clear.",
+            (
+                "- Call run_sql immediately when the request is sufficiently clear and the user wants an interactive result."
+                if background_enabled
+                else "- Call run_sql immediately when the request is sufficiently clear."
+            ),
             *(
                 [
                     "- If missing or ambiguous information would materially change the SQL meaning, call ask_clarification before run_sql."
@@ -85,7 +90,7 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
                     "- Do not ask for optional filters, ask whether to run SQL, or request confirmation after the intent is clear.",
                     "- A generic request for current flights means ATFM.T_DAY_FLIGHTS; missing origin or destination simply means no filter for that field.",
                     "- If the request needs unavailable tables or columns, explain the supported scope instead of inventing data. Clarify only when the user can choose a supported alternative.",
-                    "- Examples that require clarification: an undefined period such as 'gần đây', two unnamed airports, or 'chuyến bay đó' with no antecedent.",
+                    "- Examples that require clarification: an undefined period such as 'gần đây', an unbounded detail list such as 'tất cả chuyến bay', two unnamed airports, or 'chuyến bay đó' with no antecedent.",
                 ]
             )
 
@@ -104,9 +109,20 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
                     "Interactive query resource limits:",
                     f"- The backend returns at most {self.settings.query_max_rows} rows and shows at most {self.settings.query_preview_rows} rows in the chat preview.",
                     f"- Queries have a {self.settings.query_timeout_seconds}-second database call timeout.",
-                    "- Do not promise background execution; background jobs are not available.",
+                    *(
+                        [
+                            "- Background execution is available through queue_background_sql.",
+                            "- Call queue_background_sql only after the user explicitly asks to run in the background or selects a background option.",
+                            "- Never call run_sql and queue_background_sql in the same turn.",
+                        ]
+                        if background_enabled
+                        else [
+                            "- Do not promise background execution; background jobs are not available."
+                        ]
+                    ),
                     scope_instruction,
                     "- Aggregate queries may run directly when their intent is clear, but still use only necessary columns and filters.",
+                    "- Never use FLIGHTDATE = SYSDATE for a calendar day. For today use FLIGHTDATE >= TRUNC(SYSDATE) AND FLIGHTDATE < TRUNC(SYSDATE) + 1.",
                     "- If the result reaches the backend row limit, clearly tell the user it may be incomplete and suggest narrowing the request.",
                 ]
             )

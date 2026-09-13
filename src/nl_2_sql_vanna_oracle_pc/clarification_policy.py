@@ -43,6 +43,8 @@ class ClarificationRequirement:
 
 def find_required_clarification(
     messages: list[LlmMessage],
+    *,
+    background_enabled: bool = False,
 ) -> ClarificationRequirement | None:
     """Return a clarification that must happen before any SQL tool call."""
 
@@ -55,6 +57,34 @@ def find_required_clarification(
     requirement = _unresolved_flight_reference(messages, normalized)
     if requirement:
         return requirement
+
+    if _has_unbounded_flight_listing(normalized):
+        scope_options = [
+            ClarificationChoice("Hôm nay", f"{original} trong hôm nay"),
+            ClarificationChoice(
+                "7 ngày gần nhất",
+                f"{original} trong 7 ngày gần nhất",
+            ),
+        ]
+        if background_enabled:
+            scope_options.append(
+                ClarificationChoice(
+                    "Chạy nền",
+                    f"Chạy nền và thông báo khi hoàn thành: {original}",
+                )
+            )
+        else:
+            scope_options.append(
+                ClarificationChoice(
+                    "30 ngày gần nhất",
+                    f"{original} trong 30 ngày gần nhất",
+                )
+            )
+        return ClarificationRequirement(
+            kind="query_scope",
+            question="Bạn muốn xem danh sách chuyến bay trong khoảng thời gian nào?",
+            options=tuple(scope_options),
+        )
 
     if _has_vague_period(normalized):
         return ClarificationRequirement(
@@ -210,6 +240,24 @@ def _has_vague_period(normalized: str) -> bool:
         re.search(r"\b(gan day|dao gan day|thoi gian qua)\b", normalized)
     )
     return has_vague_phrase and not EXPLICIT_PERIOD_PATTERN.search(normalized)
+
+
+def _has_unbounded_flight_listing(normalized: str) -> bool:
+    asks_for_all_flights = bool(
+        re.search(r"\b(tat ca|toan bo)\b.*\b(chuyen bay|flights?)\b", normalized)
+    )
+    asks_for_aggregate = bool(
+        re.search(
+            r"\b(bao nhieu|dem|tong so|so luong|thong ke)\b",
+            normalized,
+        )
+    )
+    return (
+        asks_for_all_flights
+        and not asks_for_aggregate
+        and not re.search(r"\b(chay nen|background)\b", normalized)
+        and not EXPLICIT_PERIOD_PATTERN.search(normalized)
+    )
 
 
 def _asks_for_nearest_flight(normalized: str) -> bool:

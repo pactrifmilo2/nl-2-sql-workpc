@@ -201,6 +201,8 @@ missing = [
 ]
 if not settings.allowed_tables:
     missing.append("ALLOWED_TABLES")
+if settings.query_jobs_enabled and not settings.query_job_api_key:
+    missing.append("QUERY_JOB_API_KEY")
 admin_values = (
     settings.admin_auth_user,
     settings.admin_auth_password,
