@@ -17,10 +17,15 @@ from nl_2_sql_vanna_oracle_pc.content.vi import (
 )
 from nl_2_sql_vanna_oracle_pc.llm_middleware import (
     ForceToolUseMiddleware,
+    _enforce_explicit_background,
     _enforce_required_clarification,
     _prefer_clarification,
 )
-from nl_2_sql_vanna_oracle_pc.tool_use import build_force_tool_request
+from nl_2_sql_vanna_oracle_pc.tool_use import (
+    build_force_tool_request,
+    looks_like_background_request,
+    should_force_tool_use,
+)
 from nl_2_sql_vanna_oracle_pc.tools import create_tool_registry
 
 
@@ -381,3 +386,68 @@ def test_force_retry_allows_explicit_background_tool() -> None:
     assert retry_request.system_prompt is not None
     assert "call\n   queue_background_sql" in retry_request.system_prompt
     assert "Never combine run_sql" in retry_request.system_prompt
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Chạy nền danh sách chuyến bay",
+        "Xem chuyến bay ở background",
+        "Xem tất cả chuyến bay và thông báo khi hoàn thành",
+    ],
+)
+def test_explicit_background_request_detection(question: str) -> None:
+    assert looks_like_background_request(question) is True
+
+
+def test_negated_background_request_is_not_detected() -> None:
+    assert looks_like_background_request(
+        "Không chạy nền, cho tôi xem chuyến bay hôm nay"
+    ) is False
+
+
+def test_explicit_background_request_redirects_run_sql() -> None:
+    question = "Chạy nền và thông báo khi hoàn thành: xem chuyến bay hôm nay"
+    request = _request(
+        [LlmMessage(role="user", content=question)],
+        "run_sql",
+        "ask_clarification",
+        "queue_background_sql",
+    )
+    response = LlmResponse(
+        tool_calls=[
+            ToolCall(
+                id="sql-1",
+                name="run_sql",
+                arguments={
+                    "sql": "SELECT FLIGHTNBR FROM ATFM.T_DAY_FLIGHTS"
+                },
+            )
+        ]
+    )
+
+    guarded = _enforce_explicit_background(request, response)
+
+    assert guarded.tool_calls is not None
+    assert [call.name for call in guarded.tool_calls] == ["queue_background_sql"]
+    assert guarded.tool_calls[0].arguments == {
+        "question": question,
+        "sql": "SELECT FLIGHTNBR FROM ATFM.T_DAY_FLIGHTS",
+    }
+
+
+def test_background_request_forces_retry_even_for_long_prose() -> None:
+    request = _request(
+        [
+            LlmMessage(
+                role="user",
+                content="Chạy nền danh sách chuyến bay và thông báo khi hoàn thành",
+            )
+        ],
+        "run_sql",
+        "ask_clarification",
+        "queue_background_sql",
+    )
+    response = LlmResponse(content="Giải thích dài. " * 100)
+
+    assert should_force_tool_use(request, response) is True

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from vanna.core.llm import LlmMessage, LlmRequest, LlmResponse
 
@@ -73,6 +74,31 @@ single ```sql code block containing valid Oracle SQL.
 """
 
 
+def _normalize_for_matching(text: str) -> str:
+    decomposed = unicodedata.normalize("NFD", text.casefold())
+    without_marks = "".join(
+        char for char in decomposed if unicodedata.category(char) != "Mn"
+    )
+    return without_marks.replace("đ", "d")
+
+
+def looks_like_background_request(text: str) -> bool:
+    """Return whether the user explicitly requested deferred execution."""
+
+    normalized = _normalize_for_matching(text)
+    if re.search(
+        r"\b(?:khong|dung)(?:\s+can)?\s+(?:chay nen|background)\b",
+        normalized,
+    ):
+        return False
+    return bool(
+        re.search(
+            r"\b(?:chay nen|background)\b|\bthong bao khi hoan thanh\b",
+            normalized,
+        )
+    )
+
+
 def latest_user_message(messages: list[LlmMessage]) -> str | None:
     for message in reversed(messages):
         if message.role == "user" and message.content:
@@ -115,6 +141,12 @@ def should_force_tool_use(request: LlmRequest, response: LlmResponse) -> bool:
     user_message = latest_user_message(request.messages)
     if not user_message or not looks_like_data_question(user_message):
         return False
+
+    if (
+        "queue_background_sql" in available_tools
+        and looks_like_background_request(user_message)
+    ):
+        return True
 
     content = (response.content or "").strip()
     if not content:

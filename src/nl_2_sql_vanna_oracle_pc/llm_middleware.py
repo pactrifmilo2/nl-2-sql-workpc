@@ -14,7 +14,12 @@ from vanna.core.tool import ToolCall
 
 from .clarification_policy import find_required_clarification
 from .content.vi import CLARIFICATION_TOOL_RESULT, CLARIFICATION_WAIT_MESSAGE
-from .tool_use import build_force_tool_request, should_force_tool_use
+from .tool_use import (
+    build_force_tool_request,
+    latest_user_message,
+    looks_like_background_request,
+    should_force_tool_use,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +42,7 @@ class ForceToolUseMiddleware(LlmMiddleware):
         )
         response = _prefer_clarification(response)
         response = _enforce_required_clarification(request, response)
+        response = _enforce_explicit_background(request, response)
 
         if _follows_clarification_tool(request):
             if response.is_tool_call():
@@ -66,6 +72,10 @@ class ForceToolUseMiddleware(LlmMiddleware):
             retry_request,
             retry_response,
         )
+        retry_response = _enforce_explicit_background(
+            retry_request,
+            retry_response,
+        )
         if retry_response.is_tool_call():
             logger.info(
                 "Force-action retry produced tool call(s): %s",
@@ -74,6 +84,70 @@ class ForceToolUseMiddleware(LlmMiddleware):
         else:
             logger.warning("Force-action retry still returned no tool call")
         return retry_response
+
+
+def _enforce_explicit_background(
+    request: LlmRequest,
+    response: LlmResponse,
+) -> LlmResponse:
+    """Route explicit background requests away from the interactive SQL tool."""
+
+    available_tools = {tool.name for tool in (request.tools or [])}
+    if "queue_background_sql" not in available_tools:
+        return response
+
+    question = latest_user_message(request.messages)
+    if not question or not looks_like_background_request(question):
+        return response
+
+    tool_calls = response.tool_calls or []
+    if any(call.name == "ask_clarification" for call in tool_calls):
+        return response
+
+    background_call = next(
+        (call for call in tool_calls if call.name == "queue_background_sql"),
+        None,
+    )
+    if background_call is not None:
+        arguments = dict(background_call.arguments)
+        arguments.setdefault("question", question)
+        return response.model_copy(
+            update={
+                "content": None,
+                "tool_calls": [
+                    ToolCall(
+                        id=background_call.id,
+                        name="queue_background_sql",
+                        arguments=arguments,
+                    )
+                ],
+            }
+        )
+
+    sql_call = next(
+        (call for call in tool_calls if call.name == "run_sql"),
+        None,
+    )
+    if sql_call is None:
+        return response
+
+    sql = sql_call.arguments.get("sql")
+    if not isinstance(sql, str) or not sql.strip():
+        return response
+
+    logger.info("Redirecting interactive SQL call to background query queue")
+    return response.model_copy(
+        update={
+            "content": None,
+            "tool_calls": [
+                ToolCall(
+                    id=f"background_{uuid.uuid4().hex[:8]}",
+                    name="queue_background_sql",
+                    arguments={"question": question, "sql": sql},
+                )
+            ],
+        }
+    )
 
 
 def _prefer_clarification(response: LlmResponse) -> LlmResponse:
