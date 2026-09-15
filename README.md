@@ -79,10 +79,12 @@ QUERY_JOB_RESULT_TTL_HOURS=24
 QUERY_JOB_API_KEY=use-a-strong-random-secret
 ```
 
-When enabled, a broad detail request can offer a `Chạy nền` option. The application validates the
-generated Oracle `SELECT`, stores a durable job in SQLite, executes it on one background worker,
-and creates a notification when it succeeds, fails, or is cancelled. Interrupted jobs are queued
-again when the Windows service restarts. Result JSON files expire after the configured TTL.
+When enabled, every clear flight-data question runs as a background job by default. Ambiguous
+questions still require clarification first, and chart requests remain interactive unless the user
+explicitly asks for background execution. The application validates the generated Oracle `SELECT`,
+stores a durable job in SQLite, executes it on one background worker, and creates a notification
+when it succeeds, fails, or is cancelled. Interrupted jobs are queued again when the Windows
+service restarts. Result JSON files expire after the configured TTL.
 
 The external admin backend can poll these endpoints:
 

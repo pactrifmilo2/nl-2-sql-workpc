@@ -33,7 +33,7 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
             "- Users ask in Vietnamese; reply in Vietnamese after you have query results.",
             "- For an answerable flight-data question, your FIRST action must be exactly one tool call.",
             (
-                "- Call run_sql immediately when the request is sufficiently clear and the user wants an interactive result."
+                "- Call queue_background_sql for every sufficiently clear flight-data request; use run_sql only for an interactive chart or when the user explicitly declines background execution."
                 if background_enabled
                 else "- Call run_sql immediately when the request is sufficiently clear."
             ),
@@ -46,18 +46,32 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
             ),
             "- Do NOT suggest generic rephrased/example questions or ask the user to ask differently.",
             "- Do NOT say you will search or help later.",
-            "- When you execute a query, raw results are shown to the user outside your response. Summarize only after run_sql succeeds.",
+            "- Background jobs return a queue confirmation immediately and notify the admin API when execution finishes.",
             "",
             "Data-action selection:",
             "- Prefer native tool calls when supported.",
             *(
                 [
-                    "- Choose run_sql when the request is clear, or ask_clarification when essential information is unresolved."
+                    (
+                        "- Choose queue_background_sql when the request is clear, or ask_clarification when essential information is unresolved."
+                        if background_enabled
+                        else "- Choose run_sql when the request is clear, or ask_clarification when essential information is unresolved."
+                    )
                 ]
                 if clarification_enabled
-                else ["- Call run_sql when the request is clear."]
+                else [
+                    (
+                        "- Call queue_background_sql when the request is clear."
+                        if background_enabled
+                        else "- Call run_sql when the request is clear."
+                    )
+                ]
             ),
-            '- If native tool calls fail, output ONLY one JSON tool object, such as {"name":"run_sql","arguments":{"sql":"SELECT ..."}}.',
+            (
+                '- If native tool calls fail, output ONLY one JSON tool object, such as {"name":"queue_background_sql","arguments":{"question":"...","sql":"SELECT ..."}}.'
+                if background_enabled
+                else '- If native tool calls fail, output ONLY one JSON tool object, such as {"name":"run_sql","arguments":{"sql":"SELECT ..."}}.'
+            ),
             "- Or output ONLY a ```sql code block with the Oracle query.",
             "- Never mix explanatory text with the JSON or SQL when that is your first response to a data question.",
         ]
@@ -112,7 +126,9 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
                     *(
                         [
                             "- Background execution is available through queue_background_sql.",
-                            "- Call queue_background_sql only after the user explicitly asks to run in the background or selects a background option.",
+                            "- Call queue_background_sql by default for every clear flight-data question.",
+                            "- Keep chart requests interactive unless the user explicitly requests background execution.",
+                            "- If the user explicitly declines background execution, use run_sql.",
                             "- Never call run_sql and queue_background_sql in the same turn.",
                         ]
                         if background_enabled
@@ -155,8 +171,11 @@ class AtfmSystemPromptBuilder(SystemPromptBuilder):
                     "for a chart, graph, plot, or visualization.",
                     "- Explicit requests include Vietnamese phrases such as: biểu đồ, đồ thị, "
                     "vẽ, thống kê trực quan, chart, graph, plot, visualize.",
-                    "- For normal data questions (lists, counts, filters, tables), call run_sql "
-                    "and then STOP — do NOT call visualize_data.",
+                    (
+                        "- For normal data questions (lists, counts, filters, tables), call queue_background_sql and STOP — do NOT call visualize_data."
+                        if background_enabled
+                        else "- For normal data questions (lists, counts, filters, tables), call run_sql and then STOP — do NOT call visualize_data."
+                    ),
                     "- For chart requests, write aggregate SQL that returns exactly two columns: "
                     "one dimension and one numeric metric.",
                     "- For flight counts, prefer COUNT(*) (or COUNT(DISTINCT FLIGHTNBR) when needed) "

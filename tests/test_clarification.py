@@ -17,13 +17,14 @@ from nl_2_sql_vanna_oracle_pc.content.vi import (
 )
 from nl_2_sql_vanna_oracle_pc.llm_middleware import (
     ForceToolUseMiddleware,
-    _enforce_explicit_background,
+    _enforce_background_default,
     _enforce_required_clarification,
     _prefer_clarification,
 )
 from nl_2_sql_vanna_oracle_pc.tool_use import (
     build_force_tool_request,
     looks_like_background_request,
+    should_route_to_background,
     should_force_tool_use,
 )
 from nl_2_sql_vanna_oracle_pc.tools import create_tool_registry
@@ -368,7 +369,7 @@ def test_force_retry_remains_compatible_without_clarification_tool() -> None:
     assert "ask_clarification" not in retry_request.system_prompt
 
 
-def test_force_retry_allows_explicit_background_tool() -> None:
+def test_force_retry_defaults_to_background_tool() -> None:
     request = _request(
         [
             LlmMessage(
@@ -384,7 +385,7 @@ def test_force_retry_allows_explicit_background_tool() -> None:
     retry_request = build_force_tool_request(request)
 
     assert retry_request.system_prompt is not None
-    assert "call\n   queue_background_sql" in retry_request.system_prompt
+    assert "call queue_background_sql" in retry_request.system_prompt
     assert "Never combine run_sql" in retry_request.system_prompt
 
 
@@ -406,8 +407,14 @@ def test_negated_background_request_is_not_detected() -> None:
     ) is False
 
 
-def test_explicit_background_request_redirects_run_sql() -> None:
-    question = "Chạy nền và thông báo khi hoàn thành: xem chuyến bay hôm nay"
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Cho tôi xem chuyến bay hôm nay",
+        "Chạy nền và thông báo khi hoàn thành: xem chuyến bay hôm nay",
+    ],
+)
+def test_data_question_redirects_run_sql_to_background(question: str) -> None:
     request = _request(
         [LlmMessage(role="user", content=question)],
         "run_sql",
@@ -426,7 +433,7 @@ def test_explicit_background_request_redirects_run_sql() -> None:
         ]
     )
 
-    guarded = _enforce_explicit_background(request, response)
+    guarded = _enforce_background_default(request, response)
 
     assert guarded.tool_calls is not None
     assert [call.name for call in guarded.tool_calls] == ["queue_background_sql"]
@@ -436,12 +443,12 @@ def test_explicit_background_request_redirects_run_sql() -> None:
     }
 
 
-def test_background_request_forces_retry_even_for_long_prose() -> None:
+def test_clear_data_question_forces_background_retry_even_for_long_prose() -> None:
     request = _request(
         [
             LlmMessage(
                 role="user",
-                content="Chạy nền danh sách chuyến bay và thông báo khi hoàn thành",
+                content="Cho tôi danh sách chuyến bay hôm nay",
             )
         ],
         "run_sql",
@@ -451,3 +458,16 @@ def test_background_request_forces_retry_even_for_long_prose() -> None:
     response = LlmResponse(content="Giải thích dài. " * 100)
 
     assert should_force_tool_use(request, response) is True
+
+
+def test_chart_request_remains_interactive_by_default() -> None:
+    assert should_route_to_background(
+        "Vẽ biểu đồ số chuyến bay theo sân bay đi hôm nay"
+    ) is False
+    assert should_route_to_background(
+        "Chạy nền biểu đồ số chuyến bay theo sân bay đi hôm nay"
+    ) is True
+
+
+def test_non_data_message_does_not_route_to_background() -> None:
+    assert should_route_to_background("Xin chào") is False

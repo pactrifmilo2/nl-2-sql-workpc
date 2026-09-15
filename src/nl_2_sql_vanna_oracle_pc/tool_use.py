@@ -54,12 +54,14 @@ BACKGROUND_FORCE_TOOL_USE_SUFFIX = """
 
 CRITICAL: Resolve the user's data question now. Do NOT explain what you will do.
 Respond with exactly one appropriate action:
-1) If the request is sufficiently clear and interactive, call run_sql.
+1) For a sufficiently clear flight-data request, call queue_background_sql with
+   the complete Vietnamese question and valid Oracle SQL.
 2) If missing or ambiguous information would materially change the query, call
    ask_clarification with one Vietnamese question and up to three common options.
-3) If the user explicitly requested background execution, call
-   queue_background_sql with the complete Vietnamese question and valid Oracle SQL.
-4) If the request cannot be answered from the allowed schema, briefly explain the
+3) For a chart request, call run_sql unless the user explicitly requests background
+   execution. Background jobs do not render charts in the chat UI.
+4) If the user explicitly declines background execution, call run_sql.
+5) If the request cannot be answered from the allowed schema, briefly explain the
    supported scope in Vietnamese without inventing data.
 Never combine run_sql, ask_clarification, or queue_background_sql in one response.
 For tool calls, use a native call or output ONLY a JSON tool object.
@@ -97,6 +99,20 @@ def looks_like_background_request(text: str) -> bool:
             normalized,
         )
     )
+
+
+def should_route_to_background(text: str) -> bool:
+    """Default clear data questions to background unless interaction is required."""
+
+    if not looks_like_data_question(text):
+        return False
+    normalized = _normalize_for_matching(text)
+    if re.search(
+        r"\b(?:khong|dung)(?:\s+can)?\s+(?:chay nen|background)\b",
+        normalized,
+    ):
+        return False
+    return looks_like_background_request(text) or not looks_like_chart_request(text)
 
 
 def latest_user_message(messages: list[LlmMessage]) -> str | None:
@@ -144,7 +160,7 @@ def should_force_tool_use(request: LlmRequest, response: LlmResponse) -> bool:
 
     if (
         "queue_background_sql" in available_tools
-        and looks_like_background_request(user_message)
+        and should_route_to_background(user_message)
     ):
         return True
 

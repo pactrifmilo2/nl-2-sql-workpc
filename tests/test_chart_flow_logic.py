@@ -123,7 +123,7 @@ async def test_system_prompt_describes_interactive_limits_without_background_job
 
 
 @pytest.mark.asyncio
-async def test_system_prompt_requires_consent_for_background_jobs() -> None:
+async def test_system_prompt_defaults_data_questions_to_background_jobs() -> None:
     builder = AtfmSystemPromptBuilder()
 
     prompt = await builder.build_system_prompt(
@@ -137,5 +137,6 @@ async def test_system_prompt_requires_consent_for_background_jobs() -> None:
 
     assert prompt is not None
     assert "Background execution is available" in prompt
-    assert "only after the user explicitly asks" in prompt
+    assert "by default for every clear flight-data question" in prompt
+    assert "Keep chart requests interactive" in prompt
     assert "background jobs are not available" not in prompt

@@ -233,8 +233,8 @@ class QueueBackgroundSqlTool(Tool[QueueBackgroundSqlArgs]):
     def description(self) -> str:
         return (
             "Queue one validated read-only Oracle SQL query for background execution. "
-            "Use only when the user explicitly asks to run in the background or selects "
-            "the background option. Never choose background execution without consent."
+            "Use by default for clear flight-data questions when background jobs are "
+            "enabled. Do not use for unresolved ambiguities or interactive charts."
         )
 
     def get_args_schema(self) -> type[QueueBackgroundSqlArgs]:
