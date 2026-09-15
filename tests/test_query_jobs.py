@@ -287,6 +287,33 @@ def test_integration_api_requires_key_and_returns_result_and_notifications(tmp_p
     assert marked.json() == {"ok": True}
 
 
+def test_public_job_status_returns_only_done_without_api_key(tmp_path) -> None:
+    settings, store, _, completed_job = create_completed_job(tmp_path)
+    queued_job, _ = store.create_job(
+        conversation_id="conversation-2",
+        requested_by="guest@example.com",
+        question="Queued query",
+        sql="SELECT FLIGHTNBR FROM ATFM.T_DAY_FLIGHTS",
+    )
+    app = FastAPI()
+    app.include_router(create_query_job_router(settings=settings, store=store))
+    client = TestClient(app)
+
+    completed = client.get(
+        f"/api/integration/query-jobs/{completed_job['id']}/status"
+    )
+    queued = client.get(f"/api/integration/query-jobs/{queued_job['id']}/status")
+
+    assert completed.status_code == 200
+    assert completed.json() == {"status": "done"}
+    assert queued.status_code == 200
+    assert queued.json() == {"status": "not_done"}
+    assert set(completed.json()) == {"status"}
+    assert client.get(
+        "/api/integration/query-jobs/missing-job/status"
+    ).status_code == 404
+
+
 def test_expired_result_returns_gone(tmp_path) -> None:
     settings, store, _, job = create_completed_job(tmp_path)
     expired = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
@@ -322,6 +349,12 @@ def test_api_rejects_cancel_after_completion(tmp_path) -> None:
 def test_integration_api_key_does_not_require_application_basic_auth(tmp_path) -> None:
     settings = job_settings(tmp_path)
     store = QueryJobStore(settings.query_job_db_file)
+    job, _ = store.create_job(
+        conversation_id="conversation-public-status",
+        requested_by="guest@example.com",
+        question="Queued query",
+        sql="SELECT FLIGHTNBR FROM ATFM.T_DAY_FLIGHTS",
+    )
     app = FastAPI()
     app.include_router(create_query_job_router(settings=settings, store=store))
     app.add_middleware(
@@ -335,5 +368,10 @@ def test_integration_api_key_does_not_require_application_basic_auth(tmp_path) -
         "/api/integration/query-jobs",
         headers={"X-API-Key": settings.query_job_api_key},
     )
+    public_status = TestClient(app).get(
+        f"/api/integration/query-jobs/{job['id']}/status"
+    )
 
     assert response.status_code == 200
+    assert public_status.status_code == 200
+    assert public_status.json() == {"status": "not_done"}

@@ -87,6 +87,7 @@ again when the Windows service restarts. Result JSON files expire after the conf
 The external admin backend can poll these endpoints:
 
 ```http
+GET  /api/integration/query-jobs/{job_id}/status  # public: done or not_done only
 GET  /api/integration/query-jobs?status=running&limit=50
 GET  /api/integration/query-jobs/{job_id}
 GET  /api/integration/query-jobs/{job_id}/result
@@ -95,6 +96,20 @@ GET  /api/integration/notifications?unread=true&after_id=0
 POST /api/integration/notifications/{notification_id}/read
 X-API-Key: your-query-job-api-key
 ```
+
+The status-only endpoint does not require `X-API-Key` and returns only
+`{"status":"done"}` or `{"status":"not_done"}`. It treats succeeded, failed, and cancelled
+jobs as done. Every detailed endpoint remains API-key protected because it can reveal user IDs,
+generated SQL, errors, or query results.
+
+A standalone Swagger/OpenAPI contract for the external admin developer is available at
+[`docs/admin-notification-api.openapi.yaml`](docs/admin-notification-api.openapi.yaml).
+It includes the recommended 15-second cursor polling flow, schemas, examples, result retrieval,
+and cancellation behavior.
+
+An import-ready Postman collection is available at
+[`docs/NL2SQL-Admin-Notifications.postman_collection.json`](docs/NL2SQL-Admin-Notifications.postman_collection.json).
+Set its `base_url` and `api_key` collection variables before running the requests.
 
 Use `after_id` when polling notifications so the client receives only newer records. Prefer calls
 from the other admin page's backend; never embed `QUERY_JOB_API_KEY` in public browser JavaScript.

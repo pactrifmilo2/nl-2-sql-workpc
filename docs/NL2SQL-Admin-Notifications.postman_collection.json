@@ -1,0 +1,477 @@
+{
+  "info": {
+    "_postman_id": "6246d271-31f9-49a8-97c8-bde27dc2cd16",
+    "name": "NL2SQL Admin Notifications",
+    "description": "Integration requests for an external admin backend to poll background-query notifications, inspect jobs, retrieve results, and request cancellation. Background jobs are created through the chatbot; this API intentionally does not accept raw SQL submissions.\n\nThe status-only request needs no API key. Before using detailed requests, set `base_url` and `api_key`. Keep `api_key` in the admin backend and do not expose it in browser JavaScript.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-API-Key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{api_key}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Response is JSON', function () {",
+          "    pm.response.to.be.json;",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://192.168.100.136:8000",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "job_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notification_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "last_id",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "requested_by",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Setup and diagnostics",
+      "description": "Start here. These requests confirm that the integration API and API key are working.",
+      "item": [
+        {
+          "name": "Verify API and list recent jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/integration/query-jobs?limit=10&offset=0",
+            "description": "Expected status is 200. An empty `items` array is valid when the chatbot has not created a background job. If jobs exist, the script saves the newest job ID as `job_id`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Job list shape is valid', function () {",
+                  "    pm.expect(body.items).to.be.an('array');",
+                  "    pm.expect(body.total).to.be.a('number');",
+                  "    pm.expect(body.pagination).to.be.an('object');",
+                  "});",
+                  "",
+                  "if (body.items.length > 0) {",
+                  "    pm.collectionVariables.set('job_id', body.items[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify invalid API key returns 401",
+          "auth": {
+            "type": "apikey",
+            "apikey": [
+              {
+                "key": "key",
+                "value": "X-API-Key",
+                "type": "string"
+              },
+              {
+                "key": "value",
+                "value": "intentionally-invalid-key",
+                "type": "string"
+              },
+              {
+                "key": "in",
+                "value": "header",
+                "type": "string"
+              }
+            ]
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/integration/query-jobs?limit=1",
+            "description": "Negative authentication test. This request deliberately overrides the collection API key."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invalid key is rejected', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "description": "Use `Poll new notifications` every 15 seconds from the admin backend. Notification IDs are ordered and act as the durable cursor.",
+      "item": [
+        {
+          "name": "Poll new notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/integration/notifications?after_id={{last_id}}&limit=100",
+            "description": "Recommended incremental poll. The script saves the response `last_id` for the next request and saves the first returned notification ID. If 100 items are returned, call this request again immediately before waiting another 15 seconds. Reset collection variable `last_id` to `0` to replay all retained notifications."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('Notification page shape is valid', function () {",
+                  "    pm.expect(body.items).to.be.an('array');",
+                  "    pm.expect(body.unread_count).to.be.a('number');",
+                  "    pm.expect(body.last_id).to.be.a('number');",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('last_id', String(body.last_id));",
+                  "if (body.items.length > 0) {",
+                  "    pm.collectionVariables.set('notification_id', String(body.items[0].id));",
+                  "    pm.collectionVariables.set('job_id', body.items[0].job_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List unread notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/integration/notifications?unread=true&after_id=0&limit=100",
+            "description": "Loads the unread-notification view from the beginning. Use `unread_count` for the badge. The current read state is global across admin clients."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "if (body.items.length > 0) {",
+                  "    pm.collectionVariables.set('notification_id', String(body.items[0].id));",
+                  "    pm.collectionVariables.set('job_id', body.items[0].job_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List notifications for one requester",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/integration/notifications?recipient_id={{requested_by}}&after_id=0&limit=100",
+            "description": "Optional requester filter. Set `requested_by` to the chatbot identity, for example `guest@example.com`. This is not the identity of the administrator viewing the notification."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark notification read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/integration/notifications/{{notification_id}}/read",
+            "description": "No request body is required. `notification_id` is automatically populated by the polling requests. Calling this repeatedly is safe."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Notification is marked read', function () {",
+                  "    pm.expect(pm.response.json()).to.deep.equal({ ok: true });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Query jobs",
+      "description": "Inspect the job referenced by a notification, retrieve its result, or request cancellation.",
+      "item": [
+        {
+          "name": "Get public done or not done status",
+          "auth": {
+            "type": "noauth"
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/integration/query-jobs/{{job_id}}/status",
+            "description": "Public endpoint requiring no API key. It returns only `{\"status\":\"done\"}` or `{\"status\":\"not_done\"}`. Failed and cancelled jobs are also considered done, without exposing the outcome."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response contains only done or not_done', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(Object.keys(body)).to.deep.equal(['status']);",
+                  "    pm.expect(['done', 'not_done']).to.include(body.status);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List query jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/integration/query-jobs?limit=50&offset=0",
+            "description": "Lists newest jobs first. The script saves the newest job ID. Optional filters supported by the API are `status` and `requested_by`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "if (body.items.length > 0) {",
+                  "    pm.collectionVariables.set('job_id', body.items[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get query job",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/integration/query-jobs/{{job_id}}",
+            "description": "Returns status, generated Oracle SQL, row counts, errors, result availability, and timestamps for `job_id`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Job ID matches collection variable', function () {",
+                  "    pm.expect(pm.response.json().id).to.equal(pm.collectionVariables.get('job_id'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get query result",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/integration/query-jobs/{{job_id}}/result",
+            "description": "Returns columns and rows for a succeeded job while its result is still within the configured TTL. A 409 means the job is not complete; 410 means the result expired or is unavailable."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Result status is expected', function () {",
+                  "    pm.expect([200, 409, 410]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Result shape is valid', function () {",
+                  "        pm.expect(body.columns).to.be.an('array');",
+                  "        pm.expect(body.rows).to.be.an('array');",
+                  "        pm.expect(body.row_count).to.be.a('number');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel query job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/integration/query-jobs/{{job_id}}/cancel",
+            "description": "No request body is required. Returns 202 for a queued/running job and 409 for a job that has already reached a terminal state. Running Oracle calls use cooperative cancellation."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cancellation status is expected', function () {",
+                  "    pm.expect([202, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
