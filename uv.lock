@@ -1161,7 +1161,7 @@ wheels = [
 
 [[package]]
 name = "nl-2-sql-vanna-oracle-pc"
-version = "0.1.7"
+version = "0.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "chromadb" },
