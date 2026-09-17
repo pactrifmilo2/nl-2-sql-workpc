@@ -22,6 +22,7 @@ from nl_2_sql_vanna_oracle_pc.llm_middleware import (
     _prefer_clarification,
 )
 from nl_2_sql_vanna_oracle_pc.tool_use import (
+    BACKGROUND_JOB_ACCEPTED_PREFIX,
     build_force_tool_request,
     looks_like_background_request,
     should_route_to_background,
@@ -471,3 +472,76 @@ def test_chart_request_remains_interactive_by_default() -> None:
 
 def test_non_data_message_does_not_route_to_background() -> None:
     assert should_route_to_background("Xin chào") is False
+
+
+@pytest.mark.asyncio
+async def test_successful_background_card_suppresses_model_follow_up() -> None:
+    background_call = ToolCall(
+        id="background-1",
+        name="queue_background_sql",
+        arguments={
+            "question": "Cho tôi xem chuyến bay hôm nay",
+            "sql": "SELECT FLIGHTNBR FROM ATFM.T_DAY_FLIGHTS",
+        },
+    )
+    request = _request(
+        [
+            LlmMessage(role="user", content="Cho tôi xem chuyến bay hôm nay"),
+            LlmMessage(role="assistant", content="", tool_calls=[background_call]),
+            LlmMessage(
+                role="tool",
+                content=(
+                    f"{BACKGROUND_JOB_ACCEPTED_PREFIX}: "
+                    "job_id=job-1; status=queued"
+                ),
+                tool_call_id="background-1",
+            ),
+        ],
+        "run_sql",
+        "ask_clarification",
+        "queue_background_sql",
+    )
+    middleware = ForceToolUseMiddleware(object())  # type: ignore[arg-type]
+
+    guarded = await middleware.after_llm_response(
+        request,
+        LlmResponse(
+            content=(
+                "Công việc đã được xếp"
+                "\u6392\u961f\uff0c\u9884\u8ba1\u5c06\u5728\u51e0\u5206\u949f\u5185"
+                "\u5f00\u59cb\u6267\u884c\u3002"
+            )
+        ),
+    )
+
+    assert guarded.content is None
+    assert guarded.tool_calls is None
+
+
+@pytest.mark.asyncio
+async def test_failed_background_tool_keeps_explanatory_follow_up() -> None:
+    background_call = ToolCall(
+        id="background-1",
+        name="queue_background_sql",
+        arguments={},
+    )
+    request = _request(
+        [
+            LlmMessage(role="user", content="Cho tôi xem chuyến bay hôm nay"),
+            LlmMessage(role="assistant", content="", tool_calls=[background_call]),
+            LlmMessage(
+                role="tool",
+                content="Không thể đưa truy vấn vào hàng chờ.",
+                tool_call_id="background-1",
+            ),
+        ],
+        "run_sql",
+        "ask_clarification",
+        "queue_background_sql",
+    )
+    middleware = ForceToolUseMiddleware(object())  # type: ignore[arg-type]
+    response = LlmResponse(content="Không thể chạy truy vấn nền.")
+
+    guarded = await middleware.after_llm_response(request, response)
+
+    assert guarded.content == "Không thể chạy truy vấn nền."

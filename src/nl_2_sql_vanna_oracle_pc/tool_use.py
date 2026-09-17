@@ -67,6 +67,11 @@ Never combine run_sql, ask_clarification, or queue_background_sql in one respons
 For tool calls, use a native call or output ONLY a JSON tool object.
 """
 
+# Marks a successfully queued background job in the tool transcript. The LLM
+# middleware uses this to finish the turn without generating a duplicate status
+# message after the localized job card has already been rendered.
+BACKGROUND_JOB_ACCEPTED_PREFIX = "BACKGROUND_JOB_ACCEPTED"
+
 RUN_SQL_ONLY_SUFFIX = """
 
 CRITICAL: You must call run_sql now for the user's data question.

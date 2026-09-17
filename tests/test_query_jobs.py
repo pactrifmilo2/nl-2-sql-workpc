@@ -21,6 +21,7 @@ from nl_2_sql_vanna_oracle_pc.query_job_service import (
     QueueBackgroundSqlTool,
 )
 from nl_2_sql_vanna_oracle_pc.query_job_store import QueryJobStore
+from nl_2_sql_vanna_oracle_pc.tool_use import BACKGROUND_JOB_ACCEPTED_PREFIX
 from nl_2_sql_vanna_oracle_pc.query_policy import QueryPolicyError
 from nl_2_sql_vanna_oracle_pc.settings import Settings
 
@@ -242,6 +243,8 @@ async def test_background_tool_validates_sql_and_returns_job_card(tmp_path) -> N
     assert result.metadata["job_status"] == "queued"
     assert result.ui_component is not None
     assert "Mã công việc" in result.ui_component.rich_component.content
+    assert result.ui_component.rich_component.actions == []
+    assert result.result_for_llm.startswith(BACKGROUND_JOB_ACCEPTED_PREFIX)
     with pytest.raises(QueryPolicyError):
         await tool.execute(
             context,

@@ -15,6 +15,7 @@ from vanna.core.tool import ToolCall
 from .clarification_policy import find_required_clarification
 from .content.vi import CLARIFICATION_TOOL_RESULT, CLARIFICATION_WAIT_MESSAGE
 from .tool_use import (
+    BACKGROUND_JOB_ACCEPTED_PREFIX,
     build_force_tool_request,
     latest_user_message,
     should_route_to_background,
@@ -37,6 +38,10 @@ class ForceToolUseMiddleware(LlmMiddleware):
     async def after_llm_response(
         self, request: LlmRequest, response: LlmResponse
     ) -> LlmResponse:
+        if _follows_successful_background_tool(request):
+            logger.info("Suppressing duplicate background-job follow-up response")
+            return response.model_copy(update={"content": None, "tool_calls": None})
+
         response = await self.text_tool_call_middleware.after_llm_response(
             request, response
         )
@@ -84,6 +89,27 @@ class ForceToolUseMiddleware(LlmMiddleware):
         else:
             logger.warning("Force-action retry still returned no tool call")
         return retry_response
+
+
+def _follows_successful_background_tool(request: LlmRequest) -> bool:
+    """Return whether the localized background-job card already completed the turn."""
+
+    if len(request.messages) < 2 or request.messages[-1].role != "tool":
+        return False
+
+    tool_message = request.messages[-1]
+    if not (tool_message.content or "").startswith(BACKGROUND_JOB_ACCEPTED_PREFIX):
+        return False
+
+    assistant_message = request.messages[-2]
+    if assistant_message.role != "assistant":
+        return False
+
+    return any(
+        call.name == "queue_background_sql"
+        and call.id == tool_message.tool_call_id
+        for call in (assistant_message.tool_calls or [])
+    )
 
 
 def _enforce_background_default(

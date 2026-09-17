@@ -21,6 +21,7 @@ from vanna.core.user import User
 from .query_job_store import QueryJobStore
 from .query_policy import validate_runtime_sql
 from .settings import Settings
+from .tool_use import BACKGROUND_JOB_ACCEPTED_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -266,9 +267,8 @@ class QueueBackgroundSqlTool(Tool[QueueBackgroundSqlArgs]):
                 "Hệ thống không tạo công việc trùng lặp."
             )
         result_for_llm = (
-            f"Background query job {job_id} has status {status}. "
-            "Report that status in Vietnamese and explain that the admin page will "
-            "receive a notification when execution finishes. Do not run SQL again."
+            f"{BACKGROUND_JOB_ACCEPTED_PREFIX}: "
+            f"job_id={job_id}; status={status}"
         )
         return ToolResult(
             success=True,
