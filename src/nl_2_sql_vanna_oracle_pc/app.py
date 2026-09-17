@@ -23,6 +23,7 @@ from .llm_middleware import ForceToolUseMiddleware
 from .memory import ResilientChromaAgentMemory, create_agent_memory
 from .query_job_service import QueryJobService
 from .query_job_store import QueryJobStore
+from .notification import AiNotificationWriter
 from .reports import create_ai_report_logger
 from .settings import settings
 from .system_prompt import AtfmSystemPromptBuilder
@@ -39,6 +40,7 @@ def create_agent(
     admin_auth: AdminAuth | None = None,
     training_store: TrainingStore | None = None,
     query_job_service: QueryJobService | None = None,
+    notification_writer: AiNotificationWriter | None = None,
 ):
     log_startup_summary(settings)
     llm = create_llm_service(settings)
@@ -81,6 +83,7 @@ def create_agent(
         lifecycle_hooks=lifecycle_hooks,
         ai_report_logger=ai_report_logger,
         ai_report_settings=settings,
+        notification_writer=notification_writer,
     )
 
 
@@ -106,6 +109,7 @@ def create_server() -> VannaFastAPIServerWithVoice:
         admin_auth=admin_auth,
         training_store=training_store,
         query_job_service=query_job_service,
+        notification_writer=AiNotificationWriter(settings),
     )
     training_service = TrainingService(
         settings=settings,

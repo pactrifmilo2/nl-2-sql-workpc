@@ -33,6 +33,7 @@ from .reports import (
     end_request_trace,
     get_request_trace,
 )
+from .notification import AiNotificationWriter
 
 if TYPE_CHECKING:
     from vanna.core.tool import Tool
@@ -319,10 +320,12 @@ class HitlAgent(Agent):
         *args: Any,
         ai_report_logger: AiReportLogger | None = None,
         ai_report_settings: Settings | None = None,
+        notification_writer: AiNotificationWriter | None = None,
         **kwargs: Any,
     ) -> None:
         self.ai_report_logger = ai_report_logger
         self.ai_report_settings = ai_report_settings
+        self.notification_writer = notification_writer
         super().__init__(*args, **kwargs)
 
     async def _send_message(self, *args: Any, **kwargs: Any):
@@ -378,6 +381,17 @@ class HitlAgent(Agent):
             processing_error = str(exc)
             raise
         finally:
+            if (
+                self.notification_writer is not None
+                and isinstance(message, str)
+                and message.strip()
+                and not message.lstrip().startswith("/")
+            ):
+                self.notification_writer.write(
+                    question=message.strip(),
+                    completed=stream_completed and processing_error is None,
+                    response_at=datetime.now(timezone.utc),
+                )
             if should_report and trace_token is not None:
                 trace = get_request_trace()
                 try:
