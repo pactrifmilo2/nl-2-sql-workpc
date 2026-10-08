@@ -38,7 +38,6 @@ Fetch summary metrics and recent requests:
 
 ```http
 GET /api/reports/ai?start=2026-07-01T00:00:00Z&limit=50
-X-API-Key: your-report-api-key
 ```
 
 Useful filters are `start`, `end`, `success`, `user_id`, `limit` (maximum 500), and `offset`.
@@ -47,9 +46,7 @@ Fetch a single record using `GET /api/reports/ai/{report_id}`.
 Example browser usage:
 
 ```js
-const response = await fetch("https://api.example.com/api/reports/ai?limit=25", {
-  headers: { "X-API-Key": "your-report-api-key" },
-});
+const response = await fetch("https://api.example.com/api/reports/ai?limit=25");
 if (!response.ok) throw new Error(`Report request failed: ${response.status}`);
 const report = await response.json();
 
@@ -57,17 +54,15 @@ console.log(report.summary.success_rate_percent);
 console.table(report.items);
 ```
 
-Configure `REPORT_API_KEY` before exposing the endpoint. If it is empty, application-wide Basic
-Auth must be enabled or the endpoint returns `503`. For browser pages on another origin, add the
-exact origins to `REPORT_API_CORS_ORIGINS`.
+The report API requires no API key. Optional application-wide Basic Auth still applies when
+configured. For browser pages on another origin, add the exact origins to `REPORT_API_CORS_ORIGINS`.
 
 `AI_REPORT_INCLUDE_RESPONSE_TEXT=false` prevents final answers from being retained. Questions and
-generated SQL remain in the report because they are the core diagnostic fields. Do not put a
-long-lived API key in public browser JavaScript; use a backend or reverse proxy for public pages.
+generated SQL remain in the report because they are the core diagnostic fields.
 
 ## Background queries and notification API
 
-Background jobs are disabled by default. Enable them in `.env` and configure a dedicated API key:
+Background jobs are disabled by default. Enable them in `.env`:
 
 ```dotenv
 QUERY_JOBS_ENABLED=true
@@ -76,7 +71,6 @@ QUERY_JOB_RESULT_DIRECTORY=data/query-results
 QUERY_JOB_MAX_ROWS=10000
 QUERY_JOB_TIMEOUT_SECONDS=300
 QUERY_JOB_RESULT_TTL_HOURS=24
-QUERY_JOB_API_KEY=use-a-strong-random-secret
 ```
 
 When enabled, every clear flight-data question runs as a background job by default. Ambiguous
@@ -95,10 +89,8 @@ GET  /api/integration/query-jobs/{job_id}/result
 POST /api/integration/query-jobs/{job_id}/cancel
 GET  /api/integration/notifications?unread=true&after_id=0
 POST /api/integration/notifications/{notification_id}/read
-X-API-Key: your-query-job-api-key
 ```
 
-Use `after_id` when polling notifications so the client receives only newer records. Prefer calls
-from the other admin page's backend; never embed `QUERY_JOB_API_KEY` in public browser JavaScript.
-If direct browser access is unavoidable, configure only exact trusted origins in
-`QUERY_JOB_API_CORS_ORIGINS`.
+These integration endpoints require no API key and are exempt from application-wide Basic Auth.
+Use `after_id` when polling notifications so the client receives only newer records. For direct
+browser access, configure exact origins in `QUERY_JOB_API_CORS_ORIGINS`.

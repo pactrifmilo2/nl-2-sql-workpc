@@ -237,7 +237,6 @@ class VannaFastAPIServerWithVoice(VannaFastAPIServer):
                     "Accept",
                     "Authorization",
                     "Content-Type",
-                    "X-API-Key",
                 ],
             )
 
@@ -250,7 +249,6 @@ class VannaFastAPIServerWithVoice(VannaFastAPIServer):
                 allow_headers=[
                     "Accept",
                     "Content-Type",
-                    "X-API-Key",
                 ],
             )
 

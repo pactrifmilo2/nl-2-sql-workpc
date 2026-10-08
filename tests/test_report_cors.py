@@ -23,7 +23,7 @@ def test_report_cors_does_not_expose_other_app_routes() -> None:
         ReportsCORSMiddleware,
         allow_origins=["https://reports.example.com"],
         allow_methods=["GET"],
-        allow_headers=["X-API-Key"],
+        allow_headers=["Content-Type"],
     )
     client = TestClient(app)
     headers = {"Origin": "https://reports.example.com"}
@@ -50,7 +50,7 @@ def test_query_job_cors_is_limited_to_integration_routes() -> None:
         QueryJobCORSMiddleware,
         allow_origins=["https://admin.example.com"],
         allow_methods=["GET", "POST"],
-        allow_headers=["X-API-Key"],
+        allow_headers=["Content-Type"],
     )
     client = TestClient(app)
     headers = {"Origin": "https://admin.example.com"}

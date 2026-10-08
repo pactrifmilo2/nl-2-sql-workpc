@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from nl_2_sql_vanna_oracle_pc.auth_middleware import BasicAuthMiddleware
 from nl_2_sql_vanna_oracle_pc.reports import (
     RequestTrace,
     ToolExecutionTrace,
@@ -145,7 +146,7 @@ def test_ai_report_builds_performance_and_feedback_summary() -> None:
     assert [item["report_id"] for item in report["items"]] == ["2", "1"]
 
 
-def test_ai_report_endpoint_reads_jsonl_and_requires_api_key(tmp_path) -> None:
+def test_ai_report_endpoint_reads_jsonl_without_api_key(tmp_path) -> None:
     report_file = tmp_path / "ai_report.jsonl"
     report_file.write_text(
         json.dumps(
@@ -163,7 +164,6 @@ def test_ai_report_endpoint_reads_jsonl_and_requires_api_key(tmp_path) -> None:
         encoding="utf-8",
     )
     settings = Settings(
-        report_api_key="secret",
         ai_report_log_file=str(report_file),
         hitl_feedback_log_file=str(tmp_path / "feedback.jsonl"),
     )
@@ -171,24 +171,50 @@ def test_ai_report_endpoint_reads_jsonl_and_requires_api_key(tmp_path) -> None:
     app.include_router(create_reports_router(settings))
     client = TestClient(app)
 
-    assert client.get("/api/reports/ai").status_code == 401
-    response = client.get(
-        "/api/reports/ai", headers={"X-API-Key": "secret"}
-    )
+    response = client.get("/api/reports/ai")
 
     assert response.status_code == 200
     assert response.json()["summary"]["total_requests"] == 1
     assert response.json()["items"][0]["report_id"] == "report-1"
-    item_response = client.get(
-        "/api/reports/ai/report-1", headers={"X-API-Key": "secret"}
-    )
+    item_response = client.get("/api/reports/ai/report-1")
     assert item_response.status_code == 200
 
 
-def test_ai_report_endpoint_is_not_public_without_authentication() -> None:
+def test_ai_report_endpoint_is_accessible_without_authentication(tmp_path) -> None:
     app = FastAPI()
-    app.include_router(create_reports_router(Settings(report_api_key="")))
+    app.include_router(
+        create_reports_router(
+            Settings(
+                ai_report_log_file=str(tmp_path / "ai_report.jsonl"),
+                hitl_feedback_log_file=str(tmp_path / "feedback.jsonl"),
+            )
+        )
+    )
 
     response = TestClient(app).get("/api/reports/ai")
 
-    assert response.status_code == 503
+    assert response.status_code == 200
+    assert response.json()["summary"]["total_requests"] == 0
+
+
+def test_ai_report_keeps_optional_application_basic_auth(tmp_path) -> None:
+    app = FastAPI()
+    app.include_router(
+        create_reports_router(
+            Settings(
+                ai_report_log_file=str(tmp_path / "ai_report.jsonl"),
+                hitl_feedback_log_file=str(tmp_path / "feedback.jsonl"),
+            )
+        )
+    )
+    app.add_middleware(
+        BasicAuthMiddleware,
+        username="web-user",
+        password="web-password",
+    )
+    client = TestClient(app)
+
+    assert client.get("/api/reports/ai").status_code == 401
+    assert client.get(
+        "/api/reports/ai", auth=("web-user", "web-password")
+    ).status_code == 200

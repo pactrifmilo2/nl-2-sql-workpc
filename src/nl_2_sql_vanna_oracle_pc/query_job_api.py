@@ -5,12 +5,11 @@ from __future__ import annotations
 import asyncio
 import gzip
 import json
-import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from .query_job_store import JOB_STATUSES, QueryJobStore
 from .settings import Settings
@@ -41,21 +40,11 @@ def create_query_job_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/api/integration", tags=["query-jobs"])
 
-    def require_api_key(x_api_key: str) -> None:
+    def require_jobs_enabled() -> None:
         if not settings.query_jobs_enabled:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Background query jobs are disabled",
-            )
-        if not settings.query_job_api_key:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Configure QUERY_JOB_API_KEY",
-            )
-        if not secrets.compare_digest(x_api_key, settings.query_job_api_key):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing or invalid query job API key",
             )
 
     @router.get("/query-jobs")
@@ -64,9 +53,8 @@ def create_query_job_router(
         requested_by: str | None = Query(default=None, max_length=320),
         limit: int = Query(default=50, ge=1, le=500),
         offset: int = Query(default=0, ge=0),
-        x_api_key: str = Header(default="", include_in_schema=False),
     ) -> dict[str, Any]:
-        require_api_key(x_api_key)
+        require_jobs_enabled()
         if job_status is not None and job_status not in JOB_STATUSES:
             raise HTTPException(status_code=422, detail="Invalid job status")
         result = await asyncio.to_thread(
@@ -82,9 +70,8 @@ def create_query_job_router(
     @router.get("/query-jobs/{job_id}")
     async def get_query_job(
         job_id: str,
-        x_api_key: str = Header(default="", include_in_schema=False),
     ) -> dict[str, Any]:
-        require_api_key(x_api_key)
+        require_jobs_enabled()
         job = await asyncio.to_thread(store.get_job, job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="Query job not found")
@@ -93,9 +80,8 @@ def create_query_job_router(
     @router.get("/query-jobs/{job_id}/result")
     async def get_query_job_result(
         job_id: str,
-        x_api_key: str = Header(default="", include_in_schema=False),
     ) -> dict[str, Any]:
-        require_api_key(x_api_key)
+        require_jobs_enabled()
         job = await asyncio.to_thread(store.get_job, job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="Query job not found")
@@ -134,9 +120,8 @@ def create_query_job_router(
     @router.post("/query-jobs/{job_id}/cancel", status_code=202)
     async def cancel_query_job(
         job_id: str,
-        x_api_key: str = Header(default="", include_in_schema=False),
     ) -> dict[str, Any]:
-        require_api_key(x_api_key)
+        require_jobs_enabled()
         job, accepted = await asyncio.to_thread(store.request_cancel, job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="Query job not found")
@@ -153,9 +138,8 @@ def create_query_job_router(
         unread: bool = False,
         recipient_id: str | None = Query(default=None, max_length=320),
         limit: int = Query(default=100, ge=1, le=500),
-        x_api_key: str = Header(default="", include_in_schema=False),
     ) -> dict[str, Any]:
-        require_api_key(x_api_key)
+        require_jobs_enabled()
         return await asyncio.to_thread(
             store.list_notifications,
             after_id=after_id,
@@ -167,9 +151,8 @@ def create_query_job_router(
     @router.post("/notifications/{notification_id}/read")
     async def mark_notification_read(
         notification_id: int,
-        x_api_key: str = Header(default="", include_in_schema=False),
     ) -> dict[str, bool]:
-        require_api_key(x_api_key)
+        require_jobs_enabled()
         found = await asyncio.to_thread(
             store.mark_notification_read, notification_id
         )

@@ -40,7 +40,6 @@ def job_settings(tmp_path: Path, **overrides: Any) -> Settings:
         "query_job_timeout_seconds": 30,
         "query_job_result_ttl_hours": 24,
         "query_job_poll_seconds": 1,
-        "query_job_api_key": "job-api-secret",
     }
     values.update(overrides)
     return Settings(**values)
@@ -255,22 +254,22 @@ async def test_background_tool_validates_sql_and_returns_job_card(tmp_path) -> N
         )
 
 
-def test_integration_api_requires_key_and_returns_result_and_notifications(tmp_path) -> None:
+def test_integration_api_returns_result_and_notifications_without_key(tmp_path) -> None:
     settings, store, _, job = create_completed_job(tmp_path)
     app = FastAPI()
     app.include_router(create_query_job_router(settings=settings, store=store))
     client = TestClient(app)
-    headers = {"X-API-Key": settings.query_job_api_key}
-
-    assert client.get("/api/integration/query-jobs").status_code == 401
-    listing = client.get("/api/integration/query-jobs", headers=headers)
+    listing = client.get("/api/integration/query-jobs")
     assert listing.status_code == 200
     assert listing.json()["items"][0]["result_available"] is True
     assert "result_file" not in listing.json()["items"][0]
 
+    detail = client.get(f"/api/integration/query-jobs/{job['id']}")
+    assert detail.status_code == 200
+    assert detail.json()["id"] == job["id"]
+
     result = client.get(
         f"/api/integration/query-jobs/{job['id']}/result",
-        headers=headers,
     )
     assert result.status_code == 200
     assert result.json()["row_count"] == 2
@@ -278,13 +277,11 @@ def test_integration_api_requires_key_and_returns_result_and_notifications(tmp_p
 
     notifications = client.get(
         "/api/integration/notifications?unread=true",
-        headers=headers,
     )
     assert notifications.status_code == 200
     notification_id = notifications.json()["items"][0]["id"]
     marked = client.post(
         f"/api/integration/notifications/{notification_id}/read",
-        headers=headers,
     )
     assert marked.status_code == 200
     assert marked.json() == {"ok": True}
@@ -303,7 +300,6 @@ def test_expired_result_returns_gone(tmp_path) -> None:
 
     response = TestClient(app).get(
         f"/api/integration/query-jobs/{job['id']}/result",
-        headers={"X-API-Key": settings.query_job_api_key},
     )
 
     assert response.status_code == 410
@@ -316,13 +312,12 @@ def test_api_rejects_cancel_after_completion(tmp_path) -> None:
 
     response = TestClient(app).post(
         f"/api/integration/query-jobs/{job['id']}/cancel",
-        headers={"X-API-Key": settings.query_job_api_key},
     )
 
     assert response.status_code == 409
 
 
-def test_integration_api_key_does_not_require_application_basic_auth(tmp_path) -> None:
+def test_integration_api_does_not_require_application_basic_auth(tmp_path) -> None:
     settings = job_settings(tmp_path)
     store = QueryJobStore(settings.query_job_db_file)
     app = FastAPI()
@@ -336,7 +331,49 @@ def test_integration_api_key_does_not_require_application_basic_auth(tmp_path) -
 
     response = TestClient(app).get(
         "/api/integration/query-jobs",
-        headers={"X-API-Key": settings.query_job_api_key},
     )
 
     assert response.status_code == 200
+
+
+def test_api_cancels_queued_job_without_key(tmp_path) -> None:
+    settings = job_settings(tmp_path)
+    store = QueryJobStore(settings.query_job_db_file)
+    job, _ = store.create_job(
+        conversation_id="conversation-1",
+        requested_by="tester@example.com",
+        question="Cancel me",
+        sql="SELECT FLIGHTNBR FROM ATFM.T_DAY_FLIGHTS",
+    )
+    app = FastAPI()
+    app.include_router(create_query_job_router(settings=settings, store=store))
+
+    response = TestClient(app).post(
+        f"/api/integration/query-jobs/{job['id']}/cancel"
+    )
+
+    assert response.status_code == 202
+    assert response.json()["job"]["status"] == "cancelled"
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/api/integration/query-jobs"),
+        ("GET", "/api/integration/query-jobs/example"),
+        ("GET", "/api/integration/query-jobs/example/result"),
+        ("POST", "/api/integration/query-jobs/example/cancel"),
+        ("GET", "/api/integration/notifications"),
+        ("POST", "/api/integration/notifications/1/read"),
+    ],
+)
+def test_integration_api_still_rejects_disabled_jobs(tmp_path, method, path) -> None:
+    settings = job_settings(tmp_path, query_jobs_enabled=False)
+    store = QueryJobStore(settings.query_job_db_file)
+    app = FastAPI()
+    app.include_router(create_query_job_router(settings=settings, store=store))
+
+    response = TestClient(app).request(method, path)
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Background query jobs are disabled"

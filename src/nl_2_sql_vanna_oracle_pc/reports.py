@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from .settings import Settings
 
@@ -388,20 +388,6 @@ def build_ai_report(
 def create_reports_router(settings: Settings) -> APIRouter:
     router = APIRouter(prefix="/api/reports", tags=["reports"])
 
-    def require_api_key(x_api_key: str) -> None:
-        if not settings.report_api_key:
-            if settings.basic_auth_enabled:
-                return
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Configure REPORT_API_KEY or application Basic Auth",
-            )
-        if not secrets.compare_digest(x_api_key, settings.report_api_key):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing or invalid report API key",
-            )
-
     @router.get("/ai")
     async def get_ai_report(
         start: datetime | None = None,
@@ -410,9 +396,7 @@ def create_reports_router(settings: Settings) -> APIRouter:
         user_id: str | None = Query(default=None, max_length=320),
         limit: int = Query(default=DEFAULT_REPORT_LIMIT, ge=1, le=MAX_REPORT_LIMIT),
         offset: int = Query(default=0, ge=0),
-        x_api_key: str = Header(default="", include_in_schema=False),
     ) -> dict[str, Any]:
-        require_api_key(x_api_key)
         if start is not None and start.tzinfo is None:
             start = start.replace(tzinfo=timezone.utc)
         if end is not None and end.tzinfo is None:
@@ -441,9 +425,7 @@ def create_reports_router(settings: Settings) -> APIRouter:
     @router.get("/ai/{report_id}")
     async def get_ai_report_item(
         report_id: str,
-        x_api_key: str = Header(default="", include_in_schema=False),
     ) -> dict[str, Any]:
-        require_api_key(x_api_key)
         records, feedback_records = await asyncio.gather(
             asyncio.to_thread(_read_jsonl, settings.ai_report_log_file),
             asyncio.to_thread(_read_jsonl, settings.hitl_feedback_log_file),

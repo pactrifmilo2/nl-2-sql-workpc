@@ -123,14 +123,12 @@ class Settings:
     query_job_poll_seconds: int = field(
         default_factory=lambda: parse_int_env("QUERY_JOB_POLL_SECONDS", 2)
     )
-    query_job_api_key: str = getenv("QUERY_JOB_API_KEY", "").strip()
     query_job_api_cors_origins: tuple[str, ...] = field(
         default_factory=lambda: parse_csv_values("QUERY_JOB_API_CORS_ORIGINS")
     )
 
     speech_recognition_lang: str = getenv("SPEECH_RECOGNITION_LANG", "vi-VN")
 
-    report_api_key: str = getenv("REPORT_API_KEY", "").strip()
     report_api_cors_origins: tuple[str, ...] = field(
         default_factory=lambda: parse_csv_values("REPORT_API_CORS_ORIGINS")
     )
